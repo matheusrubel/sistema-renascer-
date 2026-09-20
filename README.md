@@ -1,4 +1,4 @@
-﻿# IAS Renascer - Ficha Cadastral (Sprint 1)
+﻿# Sistema Renascer - Ficha Cadastral (Sprint 1)
 
 Cadastro da ficha do Serviço de Convivência e Fortalecimento de Vínculos,
 rodando no terminal. Backend em Node.js com TypeScript.
