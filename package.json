@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/cadastro.ts"
+    "start": "node frontend/server.mjs",
+    "cadastro:terminal": "tsx backend/src/cadastro.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

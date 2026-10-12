@@ -1,7 +1,7 @@
 import readline from "node:readline";
 
-const rl = readline.createInterface({ input: process.stdin });
-const linhas = rl[Symbol.asyncIterator]();
+const leitorTerminal = readline.createInterface({ input: process.stdin });
+const linhas = leitorTerminal[Symbol.asyncIterator]();
 
 async function perguntar(texto: string): Promise<string> {
   process.stdout.write(texto + " ");
@@ -11,25 +11,25 @@ async function perguntar(texto: string): Promise<string> {
 
 async function escolher(titulo: string, opcoes: string[]): Promise<string> {
   console.log(`\n${titulo}`);
-  opcoes.forEach((o, i) => console.log(`  ${i + 1}) ${o}`));
-  const r = await perguntar("Número:");
-  return opcoes[Number(r) - 1] ?? "";
+  opcoes.forEach((opcao, indice) => console.log(`  ${indice + 1}) ${opcao}`));
+  const resposta = await perguntar("Número:");
+  return opcoes[Number(resposta) - 1] ?? "";
 }
 
 async function escolherVarios(titulo: string, opcoes: string[]): Promise<string[]> {
   console.log(`\n${titulo} (números separados por vírgula, Enter para nenhum)`);
-  opcoes.forEach((o, i) => console.log(`  ${i + 1}) ${o}`));
-  const r = await perguntar("Números:");
-  return r
+  opcoes.forEach((opcao, indice) => console.log(`  ${indice + 1}) ${opcao}`));
+  const resposta = await perguntar("Números:");
+  return resposta
     .split(",")
-    .map((n) => opcoes[Number(n.trim()) - 1])
-    .filter(Boolean);
+    .map((numero) => opcoes[Number(numero.trim()) - 1])
+    .filter((opcao): opcao is string => Boolean(opcao));
 }
 
-async function simNao(texto: string): Promise<string> {
-  const r = (await perguntar(`${texto} (s/n):`)).toLowerCase();
-  if (r.startsWith("s")) return "Sim";
-  if (r.startsWith("n")) return "Não";
+async function perguntarSimOuNao(texto: string): Promise<string> {
+  const resposta = (await perguntar(`${texto} (s/n):`)).toLowerCase();
+  if (resposta.startsWith("s")) return "Sim";
+  if (resposta.startsWith("n")) return "Não";
   return "";
 }
 
@@ -62,7 +62,7 @@ const beneficios = [
   "Benefício de Prestação Continuada - BPC",
 ];
 
-async function main() {
+async function executarCadastro() {
   console.log("=== Cadastro - Serviços Institucionais ===");
   console.log("(Enter pula o campo)\n");
 
@@ -99,7 +99,7 @@ async function main() {
   const telefone = await perguntar("Telefone:");
   const rg = await perguntar("RG:");
   const cpf = await perguntar("CPF:");
-  const carteiraTrabalho = await simNao("Carteira de trabalho");
+  const carteiraTrabalho = await perguntarSimOuNao("Carteira de trabalho");
   const escola = await perguntar("Escola:");
   const serie = await perguntar("Série:");
   const turno = await escolher("Turno:", ["Manhã", "Tarde", "Noite", "Integral"]);
@@ -108,12 +108,12 @@ async function main() {
   console.log("\n--- Dados Familiares ---");
   const maeNome = await perguntar("Nome da mãe:");
   const maeNascimento = await perguntar("Data de nascimento da mãe:");
-  const maeTrabalha = await simNao("Mãe trabalha");
+  const maeTrabalha = await perguntarSimOuNao("Mãe trabalha");
   const maeLocal = await perguntar("Local de trabalho ou fonte de renda da mãe:");
 
   const paiNome = await perguntar("\nNome do pai:");
   const paiNascimento = await perguntar("Data de nascimento do pai:");
-  const paiTrabalha = await simNao("Pai trabalha");
+  const paiTrabalha = await perguntarSimOuNao("Pai trabalha");
   const paiLocal = await perguntar("Local de trabalho ou fonte de renda do pai:");
 
   const pessoasCasa = await perguntar("\nQuantas pessoas moram na casa:");
@@ -127,11 +127,11 @@ async function main() {
   console.log("\n--- Situação do Usuário e Observações ---");
   const observacoes = await perguntar("Observações:");
 
-  rl.close();
+  leitorTerminal.close();
 
-  // ---------- resultado ----------
-  const v = (s: string) => s || "-";
-  const lista = (l: string[]) => (l.length ? l.join(", ") : "-");
+  // Exibe o resumo do cadastro.
+  const mostrarValor = (valor: string) => valor || "-";
+  const mostrarLista = (itens: string[]) => (itens.length ? itens.join(", ") : "-");
 
   console.log("\n\n==================================================");
   console.log("         FICHA CADASTRAL CADASTRADA");
@@ -139,47 +139,47 @@ async function main() {
   console.log(`Data de preenchimento: ${dataPreenchimento}`);
 
   console.log("\n--- Dados dos Atendimentos ---");
-  console.log(`Forma de acesso: ${v(formaAcesso)}`);
+  console.log(`Forma de acesso: ${mostrarValor(formaAcesso)}`);
   if (detalheAcesso) console.log(`  Qual: ${detalheAcesso}`);
-  console.log(`Oficinas e grupos: ${lista(oficinas)}`);
-  console.log(`Programas e projetos: ${lista(programas)}`);
-  console.log(`Orientador(a) social: ${v(orientador)}`);
+  console.log(`Oficinas e grupos: ${mostrarLista(oficinas)}`);
+  console.log(`Programas e projetos: ${mostrarLista(programas)}`);
+  console.log(`Orientador(a) social: ${mostrarValor(orientador)}`);
 
   console.log("\n--- Dados Pessoais do Usuário ---");
-  console.log(`Nome: ${v(nome)}`);
-  console.log(`Data de nascimento: ${v(nascimento)}`);
-  console.log(`Sexo: ${v(sexo)}`);
-  console.log(`Estado civil: ${v(estadoCivil)}`);
-  console.log(`NIS: ${v(nis)}`);
-  console.log(`Endereço: ${v(endereco)}`);
-  console.log(`Bairro: ${v(bairro)}`);
-  console.log(`Ponto de referência: ${v(pontoReferencia)}`);
-  console.log(`Telefone: ${v(telefone)}`);
-  console.log(`RG: ${v(rg)}`);
-  console.log(`CPF: ${v(cpf)}`);
-  console.log(`Carteira de trabalho: ${v(carteiraTrabalho)}`);
-  console.log(`Escola: ${v(escola)}`);
-  console.log(`Série: ${v(serie)}`);
-  console.log(`Turno: ${v(turno)}`);
+  console.log(`Nome: ${mostrarValor(nome)}`);
+  console.log(`Data de nascimento: ${mostrarValor(nascimento)}`);
+  console.log(`Sexo: ${mostrarValor(sexo)}`);
+  console.log(`Estado civil: ${mostrarValor(estadoCivil)}`);
+  console.log(`NIS: ${mostrarValor(nis)}`);
+  console.log(`Endereço: ${mostrarValor(endereco)}`);
+  console.log(`Bairro: ${mostrarValor(bairro)}`);
+  console.log(`Ponto de referência: ${mostrarValor(pontoReferencia)}`);
+  console.log(`Telefone: ${mostrarValor(telefone)}`);
+  console.log(`RG: ${mostrarValor(rg)}`);
+  console.log(`CPF: ${mostrarValor(cpf)}`);
+  console.log(`Carteira de trabalho: ${mostrarValor(carteiraTrabalho)}`);
+  console.log(`Escola: ${mostrarValor(escola)}`);
+  console.log(`Série: ${mostrarValor(serie)}`);
+  console.log(`Turno: ${mostrarValor(turno)}`);
 
   console.log("\n--- Dados Familiares ---");
-  console.log(`Mãe: ${v(maeNome)}`);
-  console.log(`  Nascimento: ${v(maeNascimento)}`);
-  console.log(`  Trabalha: ${v(maeTrabalha)}`);
-  console.log(`  Local de trabalho/renda: ${v(maeLocal)}`);
-  console.log(`Pai: ${v(paiNome)}`);
-  console.log(`  Nascimento: ${v(paiNascimento)}`);
-  console.log(`  Trabalha: ${v(paiTrabalha)}`);
-  console.log(`  Local de trabalho/renda: ${v(paiLocal)}`);
-  console.log(`Pessoas na casa: ${v(pessoasCasa)}`);
+  console.log(`Mãe: ${mostrarValor(maeNome)}`);
+  console.log(`  Nascimento: ${mostrarValor(maeNascimento)}`);
+  console.log(`  Trabalha: ${mostrarValor(maeTrabalha)}`);
+  console.log(`  Local de trabalho/renda: ${mostrarValor(maeLocal)}`);
+  console.log(`Pai: ${mostrarValor(paiNome)}`);
+  console.log(`  Nascimento: ${mostrarValor(paiNascimento)}`);
+  console.log(`  Trabalha: ${mostrarValor(paiTrabalha)}`);
+  console.log(`  Local de trabalho/renda: ${mostrarValor(paiLocal)}`);
+  console.log(`Pessoas na casa: ${mostrarValor(pessoasCasa)}`);
 
   console.log("\n--- Informações Gerais ---");
-  console.log(`Benefícios: ${lista(beneficiosRecebidos)}`);
+  console.log(`Benefícios: ${mostrarLista(beneficiosRecebidos)}`);
   if (outrosBeneficios) console.log(`Outros: ${outrosBeneficios}`);
 
   console.log("\n--- Situação do Usuário e Observações ---");
-  console.log(v(observacoes));
+  console.log(mostrarValor(observacoes));
   console.log("\n==================================================\n");
 }
 
-main();
+executarCadastro();
