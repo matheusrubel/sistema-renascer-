@@ -196,6 +196,11 @@ function abrirCalendario(campoData) {
     calendario.replaceChildren();
     const cabecalho = document.createElement("div");
     cabecalho.className = "calendar-header";
+    const anoAnterior = document.createElement("button");
+    anoAnterior.type = "button";
+    anoAnterior.className = "calendar-nav calendar-year-nav";
+    anoAnterior.setAttribute("aria-label", "Ano anterior");
+    anoAnterior.textContent = "«";
     const anterior = document.createElement("button");
     anterior.type = "button";
     anterior.className = "calendar-nav";
@@ -208,9 +213,17 @@ function abrirCalendario(campoData) {
     proximo.className = "calendar-nav";
     proximo.setAttribute("aria-label", "Próximo mês");
     proximo.textContent = "›";
+    const proximoAno = document.createElement("button");
+    proximoAno.type = "button";
+    proximoAno.className = "calendar-nav calendar-year-nav";
+    proximoAno.setAttribute("aria-label", "Próximo ano");
+    proximoAno.textContent = "»";
+    proximoAno.disabled = anoVisivel >= new Date().getFullYear();
+    anoAnterior.addEventListener("click", () => { anoVisivel--; desenharCalendario(); });
     anterior.addEventListener("click", () => { mesVisivel--; if (mesVisivel < 0) { mesVisivel = 11; anoVisivel--; } desenharCalendario(); });
     proximo.addEventListener("click", () => { mesVisivel++; if (mesVisivel > 11) { mesVisivel = 0; anoVisivel++; } desenharCalendario(); });
-    cabecalho.append(anterior, titulo, proximo);
+    proximoAno.addEventListener("click", () => { anoVisivel++; desenharCalendario(); });
+    cabecalho.append(anoAnterior, anterior, titulo, proximo, proximoAno);
 
     const grade = document.createElement("div");
     grade.className = "calendar-grid";
@@ -283,7 +296,6 @@ function iniciarCampoDeData(campoData, indice) {
 }
 
 export function iniciarControlesPersonalizados() {
-  document.querySelectorAll("select").forEach(iniciarListaDeOpcoes);
   document.querySelectorAll('input[type="date"]').forEach(iniciarCampoDeData);
   document.addEventListener("pointerdown", (evento) => {
     if (menuAberto && !menuAberto.contains(evento.target) && !menuAberto._botao?.contains(evento.target)) fecharMenu();
@@ -307,7 +319,6 @@ export function iniciarControlesPersonalizados() {
 }
 
 export function sincronizarControlesPersonalizados(escopo = document) {
-  escopo.querySelectorAll("select").forEach(atualizarListaDeOpcoes);
   escopo.querySelectorAll('input[type="date"]').forEach(atualizarCampoDeData);
 }
 

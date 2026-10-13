@@ -60,9 +60,11 @@
 .select-option:focus-visible{outline:2px solid #6d9272;outline-offset:-2px}
 .select-option:disabled{color:#9aa49d;cursor:not-allowed}
 .calendar-popover{width:296px;padding:12px;border-radius:12px}
-.calendar-header{display:grid;grid-template-columns:36px 1fr 36px;align-items:center;gap:6px;margin-bottom:10px}
+.calendar-header{display:grid;grid-template-columns:32px 32px minmax(0,1fr) 32px 32px;align-items:center;gap:3px;margin-bottom:10px}
 .calendar-header strong{text-align:center;text-transform:capitalize;color:#332652;font-size:13px;font-weight:700}
-.calendar-nav{width:34px;height:34px;border:1px solid #eee9f3;border-radius:8px;background:#faf9fc;color:#332652;font-size:23px;line-height:1;cursor:pointer}
+.calendar-nav{width:32px;height:32px;border:1px solid #eee9f3;border-radius:8px;background:#faf9fc;color:#332652;font-size:21px;line-height:1;cursor:pointer}
+.calendar-nav.calendar-year-nav{font-size:17px;font-weight:700}
+.calendar-nav:disabled{opacity:.4;cursor:not-allowed}
 .calendar-nav:hover{background:#f1edf7;border-color:#ded5e9}
 .calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
 .calendar-weekday{display:grid;height:30px;place-items:center;color:#839087;font-size:10px;font-weight:700}
@@ -100,3 +102,6 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;width:1
 .primary-button,.secondary-button{height:var(--altura-controle);min-height:var(--altura-controle);justify-content:center;border-radius:7px;font-size:11px}
 .form-actions .primary-button,.form-actions .secondary-button{height:var(--altura-controle);min-height:var(--altura-controle)}
 @media(max-width:740px){.search-box{height:var(--altura-controle);min-height:var(--altura-controle)}.search-box input{height:100%}}
+.mock-data-note{margin:-8px 0 18px;padding:10px 12px;border:1px solid #d8e4d8;border-left:3px solid #6d9272;border-radius:5px;background:#f2f7f1;color:#536358;font-size:11px;line-height:1.5}
+.mock-data-note[hidden]{display:none}
+.empty-state[hidden]{display:none!important}

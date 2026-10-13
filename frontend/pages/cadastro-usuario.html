@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#332652" />
+    <title>Cadastro de usuário | Sistema Renascer</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/auth.css" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-shell">
+      <section class="auth-aside">
+        <img class="auth-full-image" src="/assets/images/identidade-renascer.jpeg" alt="Instituto de Ação Social Renascer, com a marca centralizada sobre a imagem das crianças atendidas." />
+      </section>
+      <section class="auth-panel">
+        <form class="auth-card" id="register-form">
+          <a class="auth-back" href="/login.html">← Voltar ao login</a>
+          <span class="auth-eyebrow">NOVO ACESSO</span>
+          <h2>Cadastro de usuário</h2>
+          <p class="auth-intro">Preencha os dados para solicitar acesso ao sistema.</p>
+          <label class="auth-field"><span>Nome completo</span><input name="name" autocomplete="name" required maxlength="140" placeholder="Seu nome" /></label>
+          <label class="auth-field"><span>E-mail institucional</span><input name="email" type="email" autocomplete="email" required placeholder="voce@instituto.org.br" /></label>
+          <label class="auth-field"><span>Área de atuação</span><select name="role" required><option value="">Selecione</option><option>Recepção</option><option>Equipe técnica social</option><option>Administração</option></select></label>
+          <p class="auth-notice">A administração do Instituto autoriza e cria os acessos. Não informe uma senha neste pedido.</p>
+          <button class="auth-submit" type="submit">Solicitar cadastro</button>
+          <p class="auth-message" id="auth-message" role="status" aria-live="polite" hidden></p>
+          <p class="auth-switch">Já tem acesso? <a href="/login.html">Entrar</a></p>
+        </form>
+      </section>
+    </main>
+    <script type="module" src="/src/auth.js"></script>
+  </body>
+</html>

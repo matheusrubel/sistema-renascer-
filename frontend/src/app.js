@@ -5,9 +5,21 @@
   limparErroDoControle,
   focarControle,
 } from "./controls.js";
+import { obterSessao, listarPessoas, salvarPessoa, sair } from "./supabase.js";
 
-// Esta prévia mantém os cadastros apenas enquanto a página estiver aberta.
+// Dados de cadastro e navegação da página.
 const cadastros = [];
+const visualizarMockados = new URLSearchParams(window.location.search).get("visualizar") === "mockados";
+const sessao = obterSessao();
+if (!visualizarMockados && !sessao?.access_token) window.location.replace("/login.html");
+if (visualizarMockados) {
+  cadastros.push(
+    { id: "mock-201", name: "Ana Luiza Ferreira", birthDate: "2016-03-12", school: "Escola Municipal Hildegard Burjan", neighborhood: "Morro Alto", referralSource: "Escola", priority: "Acompanhamento prioritário", benefits: ["Bolsa Família", "Leite das Crianças"], activities: ["Música e cultura"] },
+    { id: "mock-202", name: "Pedro Henrique Ferreira", birthDate: "2012-08-20", school: "Colégio Estadual do Bairro", neighborhood: "Morro Alto", referralSource: "Procura espontânea", priority: "", benefits: ["BPC"], activities: ["Judô", "Informática"] },
+    { id: "mock-203", name: "Gabriel Santos Lima", birthDate: "2018-11-05", school: "Escola Municipal Vila Bela", neighborhood: "Vila Bela", referralSource: "Busca ativa", priority: "", benefits: ["Cartão Alimentação"], activities: ["Oficinas lúdicas"] },
+    { id: "mock-204", name: "Júlia Martins Costa", birthDate: "2009-06-21", school: "Colégio Estadual do Centro", neighborhood: "Conradinho", referralSource: "Rede socioassistencial", priority: "", benefits: [], activities: ["Grupo de Apoio ao Adolescente - GAA"] },
+  );
+}
 const janelaCadastro = document.querySelector("#record-modal");
 const formulario = document.querySelector("#record-form");
 const aviso = document.querySelector("#toast");
@@ -55,6 +67,11 @@ function definirEtapa(indice) {
 function abrirJanelaCadastro(cadastro = null) {
   idEmEdicao = cadastro?.id ?? null;
   formulario.reset();
+  const entradaPadrao = formulario.querySelector('[name="entryDate"]');
+  if (entradaPadrao) {
+    const agora = new Date();
+    entradaPadrao.value = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+  }
   if (cadastro) {
     for (const campo of formulario.elements) {
       if (!campo.name || campo.type === "file") continue;
@@ -127,7 +144,7 @@ function exibirCadastros() {
     const iniciais = cadastro.name.trim().split(/\s+/).slice(0, 2).map((parte) => parte[0]).join("").toLocaleUpperCase("pt-BR");
     const local = [cadastro.school, cadastro.neighborhood].filter(Boolean).join(" · ") || "Não informado";
     const situacao = cadastro.priority ? '<span class="status-chip priority">Prioritária</span>' : '<span class="status-chip regular">Acompanhamento</span>';
-    return `<tr><td><div class="person-cell"><span class="person-avatar">${escaparHtml(iniciais)}</span><div><div class="person-name">${escaparHtml(cadastro.name)}</div><div class="person-meta">Incluído nesta sessão</div></div></div></td><td><span class="age-chip">${idade === null ? "—" : `${idade} anos`}</span></td><td>${escaparHtml(local)}</td><td>${escaparHtml(cadastro.referralSource || "—")}</td><td>${situacao}</td><td><button class="row-menu" type="button" data-edit-id="${cadastro.id}" aria-label="Editar cadastro de ${escaparHtml(cadastro.name)}" title="Editar cadastro">✎</button><button class="row-menu" type="button" data-print-id="${cadastro.id}" aria-label="Imprimir ficha de ${escaparHtml(cadastro.name)}" title="Imprimir ficha">⎙</button></td></tr>`;
+    return `<tr><td><div class="person-cell"><span class="person-avatar">${escaparHtml(iniciais)}</span><div><div class="person-name">${escaparHtml(cadastro.name)}</div><div class="person-meta">Cadastro registrado</div></div></div></td><td><span class="age-chip">${idade === null ? "—" : `${idade} anos`}</span></td><td>${escaparHtml(local)}</td><td>${escaparHtml(cadastro.referralSource || "—")}</td><td>${situacao}</td><td><button class="row-menu" type="button" data-edit-id="${cadastro.id}" aria-label="Editar cadastro de ${escaparHtml(cadastro.name)}" title="Editar cadastro">✎</button><button class="row-menu" type="button" data-print-id="${cadastro.id}" aria-label="Imprimir ficha de ${escaparHtml(cadastro.name)}" title="Imprimir ficha">⎙</button></td></tr>`;
   }).join("");
 
   const quantidade = cadastrosFiltrados.length;
@@ -135,7 +152,8 @@ function exibirCadastros() {
   document.querySelector("#empty-state").hidden = quantidade !== 0;
   document.querySelector("#stat-total").textContent = cadastros.length;
   document.querySelector("#stat-young").textContent = cadastros.filter((cadastro) => (calcularIdade(cadastro.birthDate) ?? 100) < 18).length;
-  document.querySelector("#stat-recent").textContent = cadastros.length;
+  const familiasAcompanhadas = new Set(cadastros.map((cadastro) => cadastro.familia_id ?? cadastro.family_id ?? cadastro.id).filter(Boolean));
+  document.querySelector("#stat-families").textContent = familiasAcompanhadas.size;
   document.querySelector("#nav-count").textContent = cadastros.length;
 }
 
@@ -145,9 +163,12 @@ function criarCadastro(dadosFormulario) {
   cadastro.activities = dadosFormulario.getAll("activities");
   cadastro.programs = dadosFormulario.getAll("programs");
   cadastro.benefits = dadosFormulario.getAll("benefits");
+  for (const nome of ["healthConditions", "allergies", "disabilities", "demands"]) cadastro[nome] = dadosFormulario.getAll(nome);
   cadastro.consentSignedAt = cadastro.consentStatus === "assinado" ? new Date().toISOString() : null;
   cadastro.priority = cadastro.priority?.trim() || "";
-  cadastro.id = idEmEdicao ?? crypto.randomUUID();
+  cadastro.id = idEmEdicao ?? (visualizarMockados ? crypto.randomUUID() : null);
+  const cadastroAnterior = cadastros.find((item) => item.id === idEmEdicao);
+  if (cadastroAnterior?.familia_id) cadastro.familia_id = cadastroAnterior.familia_id;
   return cadastro;
 }
 
@@ -165,14 +186,15 @@ document.querySelector(".close-modal").addEventListener("click", fecharJanelaCad
 document.querySelector(".cancel-modal").addEventListener("click", fecharJanelaCadastro);
 janelaCadastro.addEventListener("click", (evento) => { if (evento.target === janelaCadastro) fecharJanelaCadastro(); });
 document.addEventListener("keydown", (evento) => { if (evento.key === "Escape" && !janelaCadastro.hidden) fecharJanelaCadastro(); });
-document.querySelector("#dismiss-banner").addEventListener("click", () => document.querySelector(".demo-banner").remove());
+document.querySelector("#dismiss-banner")?.addEventListener("click", () => document.querySelector(".demo-banner")?.remove());
+if (visualizarMockados) document.querySelector("#mock-data-note").hidden = false;
 document.querySelector("#previous-step").addEventListener("click", () => definirEtapa(etapaAtual - 1));
 document.querySelector("#next-step").addEventListener("click", () => {
   if (!validarEtapa(etapasFormulario[etapaAtual])) return;
   definirEtapa(etapaAtual + 1);
 });
 
-formulario.addEventListener("submit", (evento) => {
+formulario.addEventListener("submit", async (evento) => {
   evento.preventDefault();
   const etapaInvalida = etapasFormulario.find((secao) => !validarEtapa(secao));
   if (etapaInvalida) {
@@ -183,21 +205,36 @@ formulario.addEventListener("submit", (evento) => {
   const dadosFormulario = new FormData(formulario);
   const cadastro = criarCadastro(dadosFormulario);
   const indiceExistente = cadastros.findIndex((item) => item.id === idEmEdicao);
-  if (indiceExistente >= 0) cadastros[indiceExistente] = cadastro;
-  else cadastros.unshift(cadastro);
+  try {
+    const registroSalvo = visualizarMockados ? cadastro : await salvarPessoa(cadastro, sessao.access_token);
+    if (indiceExistente >= 0) cadastros[indiceExistente] = registroSalvo;
+    else cadastros.unshift(registroSalvo);
+  } catch (erro) {
+    mostrarAviso(`Não foi possível salvar o cadastro: ${erro.message}`);
+    return;
+  }
   exibirCadastros();
   fecharJanelaCadastro();
-  mostrarAviso(indiceExistente >= 0 ? "Cadastro atualizado nesta sessão de demonstração." : "Cadastro adicionado nesta sessão de demonstração.");
+  mostrarAviso(indiceExistente >= 0 ? "Cadastro atualizado." : "Cadastro adicionado.");
 });
 
 document.querySelectorAll("#search, #age-filter, #status-filter").forEach((campo) => campo.addEventListener("input", exibirCadastros));
+document.querySelectorAll("[data-logout]").forEach((botao) => botao.addEventListener("click", async (evento) => {
+  evento.preventDefault();
+  await sair();
+  window.location.replace("/login.html");
+}));
 formulario.addEventListener("input", (evento) => {
   if (evento.target.matches(":required")) limparErroDoControle(evento.target);
 });
 
 const hoje = new Date();
 const dataDeHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
-document.querySelectorAll('input[type="date"]').forEach((campo) => { campo.max = dataDeHoje; });
+document.querySelectorAll('input[type="date"]').forEach((campo) => {
+  campo.max = dataDeHoje;
+});
+const campoEntrada = formulario.querySelector('[name="entryDate"]');
+if (campoEntrada) campoEntrada.value = dataDeHoje;
 document.querySelector('[name="photo"]').addEventListener("change", (evento) => {
   const arquivo = evento.target.files?.[0];
   const previa = document.querySelector("#photo-preview");
@@ -207,7 +244,7 @@ document.querySelector('[name="photo"]').addEventListener("change", (evento) => 
 formulario.querySelectorAll('input[name="benefits"]').forEach((marcador) => marcador.addEventListener("change", atualizarCampoOutroBeneficio));
 
 document.querySelector("#export-csv").addEventListener("click", () => {
-  if (!cadastros.length) { mostrarAviso("Não há cadastros nesta sessão para exportar."); return; }
+  if (!cadastros.length) { mostrarAviso("Não há cadastros para exportar."); return; }
   const colunas = [
     ["Nome", "name"], ["Nascimento", "birthDate"], ["Escola", "school"], ["Bairro", "neighborhood"],
     ["Forma de entrada", "referralSource"], ["Situação prioritária", "priority"],
@@ -224,7 +261,7 @@ document.querySelector("#export-csv").addEventListener("click", () => {
   link.download = "cadastros-sessao-renascer.csv";
   link.click();
   URL.revokeObjectURL(enderecoTemporario);
-  mostrarAviso("Lista da sessão exportada. O arquivo contém dados pessoais.");
+  mostrarAviso("Lista exportada para CSV. O arquivo contém dados pessoais.");
 });
 
 document.querySelector("#records-body").addEventListener("click", (evento) => {
@@ -250,4 +287,20 @@ document.querySelector("#records-body").addEventListener("click", (evento) => {
   janelaImpressao.document.close();
 });
 
+if (!visualizarMockados && sessao?.perfil) {
+  const nome = sessao.perfil.nome || "Equipe Renascer";
+  const iniciais = nome.trim().split(/\s+/).slice(0, 2).map((parte) => parte[0]).join("").toLocaleUpperCase("pt-BR");
+  document.querySelector("#user-name").textContent = nome;
+  document.querySelectorAll("#user-avatar, #top-user-avatar").forEach((elemento) => { elemento.textContent = iniciais; });
+  listarPessoas(sessao.access_token).then((registros) => {
+    cadastros.splice(0, cadastros.length, ...registros);
+    exibirCadastros();
+  }).catch((erro) => {
+    if (!obterSessao()?.access_token) {
+      window.location.replace("/login.html");
+      return;
+    }
+    mostrarAviso(`Não foi possível carregar os cadastros: ${erro.message}`);
+  });
+}
 exibirCadastros();

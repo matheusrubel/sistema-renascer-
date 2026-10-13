@@ -9,3 +9,12 @@ Exemplo de uso no HTML:
 ```
 
 A logo institucional fica diretamente em `frontend/assets/logo-renascer.png`.
+
+## Imagens do login e cadastro
+
+As páginas institucionais carregam estes arquivos nesta pasta:
+
+- `identidade-renascer.jpeg` — imagem quadrada com crianças e a marca do Instituto.
+- `seja-colaborador-renascer.jpeg` — faixa “Seja um colaborador”.
+
+Mantenha os nomes e extensões acima para que as imagens apareçam automaticamente nas páginas de login e cadastro.

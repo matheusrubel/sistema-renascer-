@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>Cadastro | Sistema Renascer</title>
     <link rel="stylesheet" href="src/styles.css" />
-    <style>.step.complete{color:#3b6840}.step.complete i{background:#dfeadd;color:#332652}.form-actions button[hidden]{display:none}.step-progress span[aria-current="step"]{color:#332652}.consent-hint{font-size:9px;color:#8c8060;background:#faf7ed;border-left:2px solid #f0c040;padding:8px 10px;line-height:1.5}</style>
+    <style>.step.complete{color:#3b6840}.step.complete i{background:#dfeadd;color:#332652}.form-actions button[hidden]{display:none}.step-progress span[aria-current="step"]{color:#332652}.consent-hint{font-size:9px;color:#8c8060;background:#faf7ed;border-left:2px solid #f0c040;padding:8px 10px;line-height:1.5}.user-password{display:block;width:max-content;margin-top:4px;color:#d9d0ec;font-size:9px;text-decoration:none}.user-password:hover{text-decoration:underline;color:#fff}</style>
   </head>
   <body>
     <div class="app-shell">
@@ -28,14 +28,14 @@
 
         <div class="sidebar-bottom">
           <div class="sidebar-note"><span class="leaf">✳</span><p><strong>Cada história importa.</strong><br />Cuidar dos dados também é cuidar das pessoas.</p></div>
-          <div class="user-mini"><div class="user-avatar">RN</div><div><strong>Equipe Renascer</strong><small>Modo de demonstração</small></div><span class="more">···</span></div>
+          <div class="user-mini"><div class="user-avatar" id="user-avatar">RN</div><div><strong id="user-name">Equipe Renascer</strong><small>Acesso institucional</small><a class="user-password" href="/alterar-senha.html">Alterar senha</a></div><a class="more" href="#sair" data-logout aria-label="Sair do sistema" title="Sair">↗</a></div>
         </div>
       </aside>
 
       <main class="main-area" id="inicio">
         <header class="topbar">
           <div class="breadcrumbs"><span>Gestão social</span><span class="crumb-sep">/</span><strong>Cadastros</strong></div>
-          <div class="top-actions"><span class="environment"><i></i> Ambiente de demonstração</span><button class="icon-button" type="button" aria-label="Ajuda">?</button><div class="user-avatar top-avatar">RN</div></div>
+          <div class="top-actions"><span class="environment"><i></i> Sessão protegida</span><button class="icon-button" type="button" aria-label="Ajuda">?</button><div class="user-avatar top-avatar" id="top-user-avatar">RN</div></div>
         </header>
 
         <section class="page-content" id="cadastros">
@@ -43,17 +43,17 @@
             <div><div class="eyebrow"><span class="eyebrow-line"></span> INSTITUTO DE AÇÃO SOCIAL RENASCER</div><h1>Cadastros</h1><p class="subtitle">Um lugar seguro para acolher e acompanhar cada história.</p></div>
             <button class="primary-button" id="new-record" type="button"><span class="plus">+</span> Novo cadastro</button>
           </div>
+          <div class="mock-data-note" id="mock-data-note" role="status" hidden>Visualização com quatro cadastros fictícios. Esses dados não são enviados ao Supabase.</div>
 
-          <div class="demo-banner" role="status"><span class="demo-symbol">i</span><div><strong>Prévia visual</strong><span>Os dados são mantidos apenas nesta sessão do navegador e desaparecem ao recarregar. Ainda não há conexão com o Supabase.</span></div><button id="dismiss-banner" class="banner-close" aria-label="Fechar aviso" type="button">×</button></div>
 
           <div class="stats-grid">
-            <article class="stat-card"><div class="stat-top"><span>Pessoas cadastradas</span><span class="stat-icon green-icon">♙</span></div><strong id="stat-total">0</strong><small>nesta sessão</small></article>
+            <article class="stat-card"><div class="stat-top"><span>Pessoas cadastradas</span><span class="stat-icon green-icon">♙</span></div><strong id="stat-total">0</strong><small>cadastros ativos</small></article>
             <article class="stat-card"><div class="stat-top"><span>Crianças e adolescentes</span><span class="stat-icon gold-icon">✳</span></div><strong id="stat-young">0</strong><small>até 17 anos</small></article>
-            <article class="stat-card"><div class="stat-top"><span>Cadastros recentes</span><span class="stat-icon sage-icon">◷</span></div><strong id="stat-recent">0</strong><small>adicionados nesta sessão</small></article>
+            <article class="stat-card"><div class="stat-top"><span>Famílias acompanhadas</span><span class="stat-icon sage-icon">⌂</span></div><strong id="stat-families">0</strong><small>núcleos familiares</small></article>
           </div>
 
           <section class="records-panel" aria-labelledby="records-title">
-            <div class="panel-heading"><div><h2 id="records-title">Pessoas atendidas</h2><p>Consulte e gerencie os cadastros de entrada.</p></div><button class="secondary-button" id="export-csv" type="button" title="Disponível após a conexão com o Supabase">Exportar lista <span>↓</span></button></div>
+            <div class="panel-heading"><div><h2 id="records-title">Pessoas atendidas</h2><p>Consulte e gerencie os cadastros de entrada.</p></div><button class="secondary-button" id="export-csv" type="button" title="Exportar cadastros para CSV">Exportar lista <span>↓</span></button></div>
             <div class="filters-row"><label class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Buscar por nome, escola ou bairro" autocomplete="off" /></label><select id="age-filter" aria-label="Filtrar faixa etária"><option value="all">Todas as idades</option><option value="child">Crianças (0 a 11)</option><option value="teen">Adolescentes (12 a 17)</option><option value="adult">Adultos (18+)</option></select><select id="status-filter" aria-label="Filtrar situação"><option value="all">Todas as situações</option><option value="prioritaria">Situação prioritária</option><option value="regular">Sem prioridade indicada</option></select></div>
             <div class="table-wrap"><table><thead><tr><th>PESSOA</th><th>IDADE</th><th>ESCOLA / BAIRRO</th><th>ENTRADA</th><th>SITUAÇÃO</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody id="records-body"></tbody></table>
               <div class="empty-state" id="empty-state"><div class="empty-art"><span class="empty-sun">✳</span><span class="empty-person">♙</span></div><h3>Nenhum cadastro por aqui ainda</h3><p>Quando uma pessoa chegar ao Instituto, você pode iniciar o cadastro por aqui.</p><button class="text-button" id="empty-new" type="button">+ Criar primeiro cadastro</button></div>
@@ -68,7 +68,7 @@
     <div class="modal-backdrop" id="record-modal" hidden>
       <section class="form-modal" role="dialog" aria-modal="true" aria-labelledby="form-title">
         <header class="modal-header"><div><div class="eyebrow"><span class="eyebrow-line"></span> NOVA PESSOA ATENDIDA</div><h2 id="form-title">Vamos começar pelo acolhimento</h2><p>Preencha as informações disponíveis. Você poderá complementar o cadastro depois.</p></div><button class="icon-button close-modal" type="button" aria-label="Fechar">×</button></header>
-          <div class="step-progress" aria-label="Etapa 1 de 3"><span class="step active"><i>1</i> Identificação</span><span class="step-line"></span><span class="step"><i>2</i> Família</span><span class="step-line"></span><span class="step"><i>3</i> Entrada</span></div>
+          <div class="step-progress" aria-label="Etapa 1 de 7"><span class="step active"><i>1</i> Identificação</span><span class="step-line"></span><span class="step"><i>2</i> Família</span><span class="step-line"></span><span class="step"><i>3</i> Endereço</span><span class="step-line"></span><span class="step"><i>4</i> Domicílio</span><span class="step-line"></span><span class="step"><i>5</i> Benefícios</span><span class="step-line"></span><span class="step"><i>6</i> Saúde</span><span class="step-line"></span><span class="step"><i>7</i> Entrada</span></div>
         <form id="record-form" novalidate>
           <div class="form-scroll">
             <section class="form-section"><div class="section-title"><span class="section-number">01</span><div><h3>Quem estamos acolhendo?</h3><p>Dados básicos da criança, adolescente ou pessoa atendida.</p></div></div>
@@ -77,15 +77,22 @@
                 <label class="field"><span>Data de nascimento <b>*</b></span><input name="birthDate" type="date" required /></label>
                 <label class="field"><span>Sexo</span><select name="sex"><option value="">Selecione</option><option>Feminino</option><option>Masculino</option><option>Outro</option><option>Não informado</option></select></label>
                 <label class="field"><span>RG</span><input name="rg" maxlength="30" placeholder="Número do documento" /></label>
+                <label class="field"><span>Emissor / UF do RG</span><input name="rgIssuer" maxlength="30" placeholder="Ex.: SESP/PR" /></label>
                 <label class="field"><span>NIS</span><input name="nis" inputmode="numeric" maxlength="20" placeholder="Número do NIS" /></label>
                 <label class="field"><span>Carteira de trabalho</span><select name="workCard"><option value="">Selecione</option><option value="true">Sim</option><option value="false">Não</option></select></label>
+                <label class="field"><span>Série da carteira de trabalho</span><input name="workCardSeries" maxlength="30" /></label>
+                <label class="field"><span>Título de eleitor</span><input name="voterRegistration" maxlength="30" /></label>
                 <label class="field"><span>Escola</span><input name="school" maxlength="140" placeholder="Nome da escola" /></label>
+                <label class="field"><span>Situação escolar</span><select name="schoolStatus"><option value="">Não informado</option><option>Cursando</option><option>Interrompido</option><option>Concluído</option><option>Não estuda</option></select></label>
+                <label class="field"><span>Instituição de ensino</span><input name="schoolInstitution" maxlength="180" /></label>
                 <label class="field"><span>Série / ano</span><input name="grade" maxlength="40" placeholder="Ex.: 5º ano" /></label>
                 <label class="field"><span>Turno</span><select name="shift"><option value="">Selecione</option><option>Manhã</option><option>Tarde</option><option>Noite</option><option>Integral</option></select></label>
                 <label class="field"><span>Território / bairro</span><input name="neighborhood" maxlength="100" placeholder="Bairro onde mora" /></label>
                 <label class="field"><span>CPF <small>opcional</small></span><input name="cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" /></label>
                 <label class="field"><span>Telefone de contato</span><input name="phone" type="tel" maxlength="25" placeholder="(00) 00000-0000" /></label>
-                <label class="field span-2"><span>Foto de identificação <small>opcional</small></span><div class="file-picker"><span class="upload-icon">↑</span><span><strong>Escolher uma foto</strong><small>JPG ou PNG. O arquivo não será enviado nesta prévia.</small></span><input type="file" name="photo" accept="image/png,image/jpeg" /></div><div class="photo-preview" id="photo-preview" hidden></div></label>
+                <label class="field"><span>E-mail</span><input name="email" type="email" maxlength="180" /></label>
+                <label class="field"><span>Este telefone tem WhatsApp?</span><select name="phoneWhatsapp"><option value="">Não informado</option><option value="true">Sim</option><option value="false">Não</option></select></label>
+                <label class="field span-2"><span>Foto de identificação <small>opcional</small></span><div class="file-picker"><span class="upload-icon">↑</span><span><strong>Escolher uma foto</strong><small>Arquivo JPG ou PNG.</small></span><input type="file" name="photo" accept="image/png,image/jpeg" /></div><div class="photo-preview" id="photo-preview" hidden></div></label>
               </div>
             </section>
             <section class="form-section"><div class="section-title"><span class="section-number">02</span><div><h3>Família e responsáveis</h3><p>Informações para manter contato e compreender o contexto familiar.</p></div></div>
@@ -99,13 +106,68 @@
                 <label class="field"><span>Trabalha atualmente?</span><select name="fatherWorks"><option value="">Selecione</option><option value="true">Sim</option><option value="false">Não</option></select></label>
                 <label class="field span-2"><span>Trabalho ou fonte de renda</span><input name="fatherIncome" maxlength="140" placeholder="Opcional" /></label>
                 <label class="field"><span>Quantas pessoas moram na casa?</span><input name="householdSize" type="number" min="1" max="99" placeholder="Ex.: 4" /></label>
+                <label class="field"><span>Contato familiar adicional</span><input name="additionalContactName" maxlength="140" /></label>
+                <label class="field"><span>Telefone do contato adicional</span><input name="additionalContactPhone" type="tel" maxlength="25" /></label>
+                <label class="field"><span>Parentesco / vínculo do contato</span><input name="additionalContactRelation" maxlength="80" /></label>
+                <label class="field"><span>Outros vínculos importantes</span><input name="otherRelationships" maxlength="500" placeholder="Nome, parentesco e relação" /></label>
                 <label class="field"><span>Estado civil</span><select name="maritalStatus"><option value="">Selecione</option><option>Solteiro(a)</option><option>Casado(a)</option><option>União estável</option><option>Separado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option></select></label>
-                <label class="field span-2"><span>Endereço</span><input name="address" maxlength="180" placeholder="Rua, número e complemento" /></label>
-                <label class="field"><span>Ponto de referência</span><input name="reference" maxlength="140" placeholder="Opcional" /></label>
+                <label class="field"><span>Religião</span><input name="religion" maxlength="100" /></label>
+                <label class="field"><span>Naturalidade</span><input name="birthplace" maxlength="120" placeholder="Cidade / UF" /></label>
+                <label class="field"><span>Nacionalidade</span><input name="nationality" maxlength="80" value="Brasileira" /></label>
+                <label class="field"><span>Pode sair sozinho(a) da instituição?</span><select name="canLeaveAlone"><option value="">Não informado</option><option value="false">Não</option><option value="true">Sim</option></select></label>
+                <label class="field span-2"><span>Endereço (resumo)</span><input name="address" maxlength="180" placeholder="Rua, número e complemento" /></label>
               </div>
             </section>
-            <section class="form-section"><div class="section-title"><span class="section-number">03</span><div><h3>Como chegou ao Instituto?</h3><p>Origem do encaminhamento e informações para o acompanhamento.</p></div></div>
+            <section class="form-section"><div class="section-title"><span class="section-number">03</span><div><h3>Endereço</h3><p>Localização e tempo de residência.</p></div></div><div class="form-grid">
+              <label class="field"><span>CEP</span><input name="postalCode" inputmode="numeric" maxlength="9" placeholder="00000-000" /></label>
+              <label class="field"><span>Estado</span><input name="state" maxlength="60" /></label>
+              <label class="field"><span>Município</span><input name="municipality" maxlength="100" /></label>
+              <label class="field"><span>Bairro</span><input name="neighborhood" maxlength="100" /></label>
+              <label class="field span-2"><span>Logradouro</span><input name="street" maxlength="180" placeholder="Rua, avenida, estrada" /></label>
+              <label class="field"><span>Número</span><input name="addressNumber" maxlength="20" /></label>
+              <label class="field"><span>Complemento</span><input name="addressComplement" maxlength="120" /></label>
+              <label class="field"><span>Ponto de referência</span><input name="reference" maxlength="140" /></label>
+              <label class="field"><span>Mora neste endereço desde</span><input name="residenceSinceYear" type="number" min="1900" max="2100" placeholder="Ano" /></label>
+            </div></section>
+            <section class="form-section"><div class="section-title"><span class="section-number">04</span><div><h3>Informações do domicílio</h3><p>Condições da moradia e serviços disponíveis.</p></div></div><div class="form-grid">
+              <label class="field"><span>Reside em área de risco?</span><select name="riskArea"><option value="">Não informado</option><option value="false">Não</option><option value="true">Sim</option></select></label>
+              <label class="field"><span>Tipo de moradia</span><select name="housingType"><option value="">Não informado</option><option>Própria</option><option>Alugada</option><option>Financiada</option><option>Cedida</option><option>Ocupação</option><option>Outra</option></select></label>
+              <label class="field"><span>Número de cômodos</span><input name="roomCount" type="number" min="1" max="99" /></label>
+              <label class="field"><span>Material das paredes externas</span><input name="wallMaterial" maxlength="100" /></label>
+              <label class="field"><span>Material do piso</span><input name="floorMaterial" maxlength="100" /></label>
+              <label class="field"><span>Material do telhado</span><input name="roofMaterial" maxlength="100" /></label>
+              <label class="field"><span>Abastecimento de água</span><input name="waterSupply" maxlength="120" /></label>
+              <label class="field"><span>Forma de iluminação</span><input name="lighting" maxlength="120" /></label>
+              <label class="field"><span>Destino do esgoto</span><input name="sewageDestination" maxlength="120" /></label>
+              <label class="field"><span>Destino do lixo</span><input name="garbageDestination" maxlength="120" /></label>
+            </div></section>
+            <section class="form-section"><div class="section-title"><span class="section-number">05</span><div><h3>Benefícios e despesas</h3><p>Benefícios recebidos pela família e despesas mensais informadas.</p></div></div><div class="form-grid">
+              <label class="field"><span>Família cadastrada no CadÚnico?</span><select name="cadunico"><option value="">Não informado</option><option value="true">Sim</option><option value="false">Não</option></select></label>
+              <fieldset class="field span-2 check-field"><legend>Benefícios recebidos</legend><div class="check-grid">
+                <label><input type="checkbox" name="benefits" value="Aluguel Social" /> Aluguel Social</label><label><input type="checkbox" name="benefits" value="Aposentadoria" /> Aposentadoria</label><label><input type="checkbox" name="benefits" value="Auxílio Acidente" /> Auxílio Acidente</label><label><input type="checkbox" name="benefits" value="Auxílio Doença" /> Auxílio Doença</label><label><input type="checkbox" name="benefits" value="Auxílio Reclusão" /> Auxílio Reclusão</label><label><input type="checkbox" name="benefits" value="Bolsa Família" /> Bolsa Família</label><label><input type="checkbox" name="benefits" value="BPC" /> BPC</label><label><input type="checkbox" name="benefits" value="Cartão Alimentação" /> Cartão Alimentação</label><label><input type="checkbox" name="benefits" value="Pensão por Morte" /> Pensão por Morte</label><label><input type="checkbox" name="benefits" value="Leite das Crianças" /> Leite das Crianças</label><label><input type="checkbox" name="benefits" value="Outro benefício" /> Outro</label>
+              </div></fieldset>
+              <label class="field"><span>Água e esgoto (R$)</span><input name="expenseWater" type="number" min="0" step="0.01" /></label><label class="field"><span>Aluguel (R$)</span><input name="expenseRent" type="number" min="0" step="0.01" /></label><label class="field"><span>Energia elétrica (R$)</span><input name="expenseElectricity" type="number" min="0" step="0.01" /></label><label class="field"><span>Alimentação, higiene e limpeza (R$)</span><input name="expenseFood" type="number" min="0" step="0.01" /></label><label class="field"><span>Empréstimos / financiamentos (R$)</span><input name="expenseLoans" type="number" min="0" step="0.01" /></label><label class="field"><span>Gás, carvão e lenha (R$)</span><input name="expenseFuel" type="number" min="0" step="0.01" /></label><label class="field"><span>Medicamentos de uso regular (R$)</span><input name="expenseMedication" type="number" min="0" step="0.01" /></label><label class="field"><span>Transporte (R$)</span><input name="expenseTransport" type="number" min="0" step="0.01" /></label>
+            </div></section>
+            <section class="form-section"><div class="section-title"><span class="section-number">06</span><div><h3>Saúde</h3><p>Informações declaradas pela família para apoiar o acolhimento.</p></div></div><div class="form-grid">
+              <fieldset class="field span-2 check-field"><legend>Condições de saúde</legend><div class="check-grid"><label><input type="checkbox" name="healthConditions" value="Desnutrição" /> Desnutrição</label><label><input type="checkbox" name="healthConditions" value="Diabetes" /> Diabetes</label><label><input type="checkbox" name="healthConditions" value="Hipertensão" /> Hipertensão</label><label><input type="checkbox" name="healthConditions" value="HIV" /> HIV (relato voluntário)</label><label><input type="checkbox" name="healthConditions" value="Intolerância à lactose" /> Intolerância à lactose</label><label><input type="checkbox" name="healthConditions" value="Intolerância ao glúten" /> Intolerância ao glúten</label><label><input type="checkbox" name="healthConditions" value="Obesidade" /> Obesidade</label><label><input type="checkbox" name="healthConditions" value="Outro" /> Outra</label></div></fieldset>
+              <label class="field span-2"><span>Detalhe de outra condição</span><input name="healthOther" maxlength="250" /></label>
+              <fieldset class="field span-2 check-field"><legend>Alergias</legend><div class="check-grid"><label><input type="checkbox" name="allergies" value="Medicamentos" /> Medicamentos</label><label><input type="checkbox" name="allergies" value="Picada de insetos" /> Picada de insetos</label><label><input type="checkbox" name="allergies" value="Alimentos" /> Alimentos</label><label><input type="checkbox" name="allergies" value="Outra" /> Outra</label></div></fieldset>
+              <label class="field span-2"><span>Detalhe de alergias</span><input name="allergyDetails" maxlength="250" /></label>
+              <label class="field"><span>Faz uso de medicação?</span><select name="usesMedication"><option value="">Não informado</option><option value="false">Não</option><option value="true">Sim</option></select></label><label class="field span-2"><span>Quais medicações?</span><input name="medications" maxlength="500" /></label>
+              <fieldset class="field span-2 check-field"><legend>Deficiências</legend><div class="check-grid"><label><input type="checkbox" name="disabilities" value="Física" /> Física</label><label><input type="checkbox" name="disabilities" value="Intelectual" /> Intelectual</label><label><input type="checkbox" name="disabilities" value="Auditiva" /> Auditiva</label><label><input type="checkbox" name="disabilities" value="Visual" /> Visual</label><label><input type="checkbox" name="disabilities" value="Múltipla" /> Múltipla</label><label><input type="checkbox" name="disabilities" value="Outra" /> Outra</label></div></fieldset>
+              <label class="field"><span>Contato para emergência em saúde</span><input name="healthContactName" maxlength="140" /></label><label class="field"><span>Telefone de emergência</span><input name="healthContactPhone" type="tel" maxlength="25" /></label>
+              <label class="field"><span>Uso de substâncias psicoativas</span><select name="substanceUse"><option value="">Não informado</option><option>Sim</option><option>Não faz uso</option><option>Não reportado</option></select></label><label class="field"><span>Uso por morador da casa</span><select name="householdSubstanceUse"><option value="">Não informado</option><option>Sim</option><option>Não faz uso</option><option>Não reportado</option></select></label>
+              <label class="field"><span>Está à procura de trabalho?</span><select name="seekingWork"><option value="">Não informado</option><option value="true">Sim</option><option value="false">Não</option></select></label>
+              <label class="field"><span>Profissão / ocupação atual</span><input name="currentProfession" maxlength="140" /></label>
+              <label class="field"><span>Empresa atual</span><input name="currentEmployer" maxlength="180" /></label>
+              <label class="field"><span>Remuneração atual (R$)</span><input name="currentPay" type="number" min="0" step="0.01" /></label>
+              <label class="field"><span>Telefone do trabalho</span><input name="workPhone" type="tel" maxlength="25" /></label>
+              <label class="field span-2"><span>Experiências profissionais anteriores</span><textarea name="pastWorkHistory" rows="3" maxlength="1500" placeholder="Profissão, empresa, período e remuneração, se informados"></textarea></label>
+            </div></section>
+            <section class="form-section"><div class="section-title"><span class="section-number">07</span><div><h3>Entrada e acompanhamento</h3><p>Origem do encaminhamento, demandas e informações para acompanhamento.</p></div></div>
               <div class="form-grid">
+                <label class="field"><span>Data de entrada <b>*</b></span><input name="entryDate" type="date" required /></label>
+                <label class="field"><span>Forma de acesso <b>*</b></span><select name="accessMethod" required><option value="">Selecione</option><option>Demanda espontânea</option><option>Encaminhamento</option><option>Busca ativa</option><option>Outro</option></select></label>
                 <label class="field"><span>Forma de entrada <b>*</b></span><select name="referralSource" required><option value="">Selecione</option><option>Procura espontânea</option><option>Busca ativa</option><option>Escola</option><option>Conselho Tutelar</option><option>Rede socioassistencial</option><option>Outra política pública</option><option>Outra instituição</option></select></label>
                 <label class="field"><span>Instituição / pessoa que encaminhou</span><input name="referralDetail" maxlength="140" placeholder="Se aplicável" /></label>
                 <label class="field span-2"><span>Motivo da busca / encaminhamento</span><textarea name="referralReason" rows="3" maxlength="1000" placeholder="Descreva brevemente, sem incluir detalhes sigilosos de atendimento."></textarea></label>
@@ -117,9 +179,11 @@
                 <fieldset class="field span-2 check-field"><legend>Benefícios informados</legend><div class="check-grid"><label><input type="checkbox" name="benefits" value="Leite das Crianças" /> Leite das Crianças</label><label><input type="checkbox" name="benefits" value="Programa Auxílio Brasil" /> Auxílio Brasil</label><label><input type="checkbox" name="benefits" value="Benefício de Prestação Continuada - BPC" /> BPC</label><label><input type="checkbox" name="benefits" value="Outro benefício" /> Outro benefício</label></div></fieldset>
                 <label class="field span-2" id="other-benefit-field" hidden><span>Qual benefício?</span><input name="otherBenefits" maxlength="140" placeholder="Descreva o benefício informado" /></label>
                 <label class="field span-2"><span>Observações gerais <small>não sigilosas</small></span><textarea name="notes" rows="3" maxlength="1500" placeholder="Informações gerais úteis para o cadastro de entrada."></textarea></label>
+                <fieldset class="field span-2 check-field"><legend>Demandas</legend><div class="check-grid"><label><input type="checkbox" name="demands" value="Acesso a benefícios eventuais" /> Acesso a benefícios eventuais</label><label><input type="checkbox" name="demands" value="Grupos de Convivência" /> Grupos de Convivência</label><label><input type="checkbox" name="demands" value="Serviços Socioassistenciais" /> Serviços Socioassistenciais</label><label><input type="checkbox" name="demands" value="Outras demandas" /> Outras demandas</label></div></fieldset>
+                <label class="field span-2"><span>Grupos / atividades desejados e período</span><textarea name="desiredGroups" rows="2" maxlength="500" placeholder="A inscrição e disponibilidade de vagas serão gerenciadas no módulo de grupos."></textarea></label>
                 <label class="field"><span>Termo de consentimento</span><select name="consentStatus"><option value="pendente">Pendente de assinatura</option><option value="assinado">Assinado e recebido</option><option value="nao_autorizado">Não autorizado</option></select></label>
                 <label class="field"><span>Versão do termo</span><input name="consentVersion" maxlength="40" placeholder="Ex.: versão revisada pelo Instituto" /></label>
-                <p class="consent-hint span-2">O texto do termo deve ser fornecido e aprovado pelo Instituto. Nesta prévia, o status fica apenas na sessão; o arquivo assinado ainda não é armazenado.</p>
+                <p class="consent-hint span-2">O texto do termo deve ser fornecido e aprovado pelo Instituto. O armazenamento do documento assinado requer configuração de arquivos institucionais.</p>
               </div>
             </section>
           </div>
