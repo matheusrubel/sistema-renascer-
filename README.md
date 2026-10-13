@@ -1,33 +1,26 @@
-# Sistema Renascer — módulo de cadastro e recepção
+# Sistema Renascer
 
-Prévia navegável do primeiro módulo, com formulário em etapas para crianças, adolescentes e famílias, consulta, filtros, edição, impressão de ficha e exportação CSV da sessão.
+Módulo institucional de cadastro e recepção. Inclui autenticação Supabase, controle de acesso por perfil, cadastro de pessoas e famílias, vínculos com responsáveis, benefícios, atividades, programas e consentimentos.
 
-## Executar a prévia
+## Executar
 
-Requer Node.js 18 ou superior. Na pasta do projeto, execute:
+Requer Node.js 18 ou superior. Configure `backend/.env` com `SUPABASE_URL` e `SUPABASE_ANON_KEY`, aplique as migrations e inicie o servidor:
 
 ```bash
 npm start
 ```
 
-Abra o endereço local exibido no terminal (por padrão, `http://127.0.0.1:4173`). A prévia não precisa de dependências adicionais.
+Abra o endereço local exibido no terminal, normalmente `http://127.0.0.1:4173`.
 
-Os cadastros ficam apenas na memória da aba e são apagados ao recarregar ou fechar. Não insira dados reais ou sensíveis nesta prévia. Ela ainda não autentica usuários nem se conecta ao Supabase.
+## Configurar o Supabase
 
-## Supabase
+1. Aplique, nesta ordem, os arquivos em `backend/supabase/migrations/` (`001` a `005`).
+2. Crie a conta inicial no Supabase Authentication.
+3. Como administradora, inclua o UUID dessa conta em `public.perfis_acesso` com o papel `admin`.
+4. Entre no sistema e crie os demais perfis pela área administrativa do Supabase.
 
-A migration inicial está em [`backend/supabase/migrations/001_cadastro_entrada.sql`](backend/supabase/migrations/001_cadastro_entrada.sql). Ela cria perfis de acesso, famílias, pessoas atendidas, responsáveis, catálogos de atividades/benefícios e vínculos, com políticas RLS.
+O pedido de cadastro de usuário fica pendente e não cria uma conta automaticamente. Não habilite o cadastro público no Supabase Auth. A chave `SUPABASE_SERVICE_ROLE_KEY` não é necessária para o uso da aplicação e nunca deve ser disponibilizada no navegador.
 
-Revise a migration e os papéis com a equipe responsável antes de executar no projeto Supabase. Após criar uma conta em Authentication, um administrador precisa inserir o UUID da conta em `public.perfis_acesso` usando o SQL Editor administrativo. Não habilite cadastro público de usuários.
+O caminho `/?visualizar=mockados` mostra somente dados fictícios em memória para prévia visual. Esses registros não são enviados ao Supabase.
 
-Fotos e documentos assinados usam apenas campos para seus caminhos no Storage; ainda é necessário criar bucket privado e políticas antes de habilitar uploads. O termo jurídico não foi incluído porque a reunião diz que o Instituto ainda revisaria/forneceria o texto. A conexão entre a interface e o Supabase, assim como login e controle de sessão, também é uma etapa posterior.
-
-## Protótipo anterior
-
-O código da interface está em `frontend/`. O código e os recursos do backend ficam em `backend/`.
-
-Para executar o protótipo de cadastro em terminal:
-
-```bash
-npm run cadastro:terminal
-```
+Fotos e documentos assinados ainda não são enviados ao Storage. Configure um bucket privado e políticas específicas antes de habilitar esses uploads. O texto do termo de consentimento deve ser fornecido e aprovado pelo Instituto.
