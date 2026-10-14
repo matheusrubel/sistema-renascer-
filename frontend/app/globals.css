@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@import "../src/styles.css";
+@import "../src/auth.css";
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
+.form-section[hidden] { display: none !important; }
+.form-actions button[hidden] { display: none !important; }

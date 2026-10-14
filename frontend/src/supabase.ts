@@ -1,11 +1,9 @@
-const CHAVE_SESSAO = "renascer.supabase.session";
+﻿const CHAVE_SESSAO = "renascer.supabase.session";
 let configuracaoPromise;
+type LinhaSupabase = Record<string, any>;
 
-async function configuracao() {
-  configuracaoPromise ??= fetch("/api/config").then(async (resposta) => {
-    if (!resposta.ok) throw new Error("Não foi possível carregar a configuração do Supabase.");
-    return resposta.json();
-  });
+async function configuracao(): Promise<{ url: string; anonKey: string }> {
+  configuracaoPromise ??= Promise.resolve({ url: "/api/supabase", anonKey: "server-managed" });
   return configuracaoPromise;
 }
 
@@ -18,12 +16,12 @@ export function obterSessao() {
   }
 }
 
-export function salvarSessao(sessao) {
+export function salvarSessao(sessao: any): void {
   if (sessao) sessionStorage.setItem(CHAVE_SESSAO, JSON.stringify(sessao));
   else sessionStorage.removeItem(CHAVE_SESSAO);
 }
 
-async function requisicaoSupabase(caminho, { token, metodo = "GET", corpo, preferencia, renovar = true } = {}) {
+async function requisicaoSupabase<T = any>(caminho: string, { token, metodo = "GET", corpo, preferencia, renovar = true }: { token?: string; metodo?: string; corpo?: any; preferencia?: string; renovar?: boolean } = {}): Promise<T> {
   const config = await configuracao();
   const resposta = await fetch(`${config.url}${caminho}`, {
     method: metodo,
@@ -56,18 +54,21 @@ async function requisicaoSupabase(caminho, { token, metodo = "GET", corpo, prefe
     const mensagem = dados?.msg || dados?.message || dados?.error_description || dados?.error || "Falha ao comunicar com o Supabase.";
     throw new Error(mensagem);
   }
-  return dados;
+  return dados as T;
 }
 
-export async function entrar(email, senha) {
+export async function entrar(email: string, senha: string): Promise<any> {
+  const emailNormalizado = email.trim().toLowerCase();
+  if (!emailNormalizado) throw new Error("Informe seu e-mail institucional.");
+  if (!senha) throw new Error("Informe sua senha.");
   const sessao = await requisicaoSupabase("/auth/v1/token?grant_type=password", {
-    metodo: "POST", corpo: { email, password: senha },
+    metodo: "POST", corpo: { email: emailNormalizado, password: senha },
   });
   const perfis = await requisicaoSupabase(`/rest/v1/perfis_acesso?user_id=eq.${encodeURIComponent(sessao.user.id)}&select=nome,papel,ativo&limit=1`, { token: sessao.access_token });
   const perfil = perfis?.[0];
   if (!perfil?.ativo || !["admin", "recepcao", "tecnico_social"].includes(perfil.papel)) {
     await requisicaoSupabase("/auth/v1/logout", { metodo: "POST", token: sessao.access_token }).catch(() => {});
-    throw new Error("Este usuário ainda não tem um perfil institucional ativo. Peça à administração para liberar o acesso.");
+    throw new Error("Este usuÃ¡rio ainda nÃ£o tem um perfil institucional ativo. PeÃ§a Ã  administraÃ§Ã£o para liberar o acesso.");
   }
   salvarSessao({ ...sessao, perfil });
   return perfil;
@@ -79,9 +80,9 @@ export async function sair() {
   if (sessao?.access_token) await requisicaoSupabase("/auth/v1/logout", { metodo: "POST", token: sessao.access_token }).catch(() => {});
 }
 
-export async function solicitarRedefinicaoSenha(email) {
+export async function solicitarRedefinicaoSenha(email: string): Promise<void> {
   const config = await configuracao();
-  const redirectTo = `${window.location.origin}/alterar-senha.html`;
+  const redirectTo = `${window.location.origin}/alterar-senha`;
   const resposta = await fetch(`${config.url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
     method: "POST",
     headers: { apikey: config.anonKey, "Content-Type": "application/json" },
@@ -90,16 +91,16 @@ export async function solicitarRedefinicaoSenha(email) {
   if (!resposta.ok) {
     let erro;
     try { erro = await resposta.json(); } catch { erro = null; }
-    throw new Error(erro?.msg || erro?.message || "Não foi possível solicitar a redefinição. Tente novamente.");
+    throw new Error(erro?.msg || erro?.message || "NÃ£o foi possÃ­vel solicitar a redefiniÃ§Ã£o. Tente novamente.");
   }
 }
 
-export async function atualizarSenha(senha, token = obterSessao()?.access_token) {
-  if (!token) throw new Error("Sua sessão de redefinição expirou. Solicite um novo link.");
+export async function atualizarSenha(senha: string, token = obterSessao()?.access_token): Promise<any> {
+  if (!token) throw new Error("Sua sessÃ£o de redefiniÃ§Ã£o expirou. Solicite um novo link.");
   return requisicaoSupabase("/auth/v1/user", { token, metodo: "PUT", corpo: { password: senha } });
 }
 
-export async function solicitarAcesso({ nome, email, area }) {
+export async function solicitarAcesso({ nome, email, area }: { nome: string; email: string; area: string }): Promise<void> {
   const config = await configuracao();
   const resposta = await fetch(`${config.url}/rest/v1/solicitacoes_acesso`, {
     method: "POST",
@@ -109,22 +110,23 @@ export async function solicitarAcesso({ nome, email, area }) {
   if (!resposta.ok) {
     let erro;
     try { erro = await resposta.json(); } catch { erro = null; }
-    throw new Error(erro?.message || "Não foi possível enviar a solicitação. Tente novamente mais tarde.");
+    throw new Error(erro?.message || "NÃ£o foi possÃ­vel enviar a solicitaÃ§Ã£o. Tente novamente mais tarde.");
   }
 }
 
-export async function listarPessoas(token) {
-  const pessoas = await requisicaoSupabase("/rest/v1/pessoas_atendidas?select=*&status=eq.ativo&order=criado_em.desc", { token });
+export async function listarPessoas(token: string, status: "ativo" | "inativo" | "todos" = "ativo"): Promise<any[]> {
+	const filtroStatus = status === "todos" ? "" : `&status=eq.${status}`;
+	const pessoas = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/pessoas_atendidas?select=*&order=criado_em.desc${filtroStatus}`, { token });
   if (!pessoas.length) return [];
   const idsFamilia = [...new Set(pessoas.map((pessoa) => pessoa.familia_id).filter(Boolean))];
   const queryFamilias = idsFamilia.map(encodeURIComponent).join(",");
-  const familias = queryFamilias ? await requisicaoSupabase(`/rest/v1/familias?select=*&id=in.(${queryFamilias})`, { token }) : [];
+  const familias: LinhaSupabase[] = queryFamilias ? await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/familias?select=*&id=in.(${queryFamilias})`, { token }) : [];
   const porId = new Map(familias.map((familia) => [familia.id, familia]));
   const idsPessoa = pessoas.map((pessoa) => pessoa.id);
   const filtroPessoas = idsPessoa.map(encodeURIComponent).join(",");
   const [responsaveis, consentimentos, beneficios, atividades, programas] = await Promise.all([
-    requisicaoSupabase(`/rest/v1/responsaveis_familiares?select=*&pessoa_atendida_id=in.(${filtroPessoas})`, { token }),
-    requisicaoSupabase(`/rest/v1/consentimentos_cadastro?select=*&pessoa_atendida_id=in.(${filtroPessoas})&order=criado_em.desc`, { token }),
+    requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/responsaveis_familiares?select=*&pessoa_atendida_id=in.(${filtroPessoas})`, { token }),
+    requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/consentimentos_cadastro?select=*&pessoa_atendida_id=in.(${filtroPessoas})&order=criado_em.desc`, { token }),
     carregarVinculos("pessoa_beneficio", "catalogo_beneficios", "beneficio_id", "nome", filtroPessoas, token),
     carregarVinculos("pessoa_atividade_interesse", "catalogo_atividades", "atividade_id", "nome", filtroPessoas, token),
     carregarVinculos("pessoa_programa_interesse", "catalogo_programas", "programa_id", "nome", filtroPessoas, token),
@@ -134,7 +136,7 @@ export async function listarPessoas(token) {
   return pessoas.map((pessoa) => {
     const familiares = porPessoaResponsaveis.get(pessoa.id) || [];
     const relacionados = {
-      mae: familiares.find((item) => /mãe/i.test(item.parentesco || "")),
+      mae: familiares.find((item) => /mÃ£e/i.test(item.parentesco || "")),
       pai: familiares.find((item) => /pai/i.test(item.parentesco || "")),
       consentimento: porPessoaConsentimento.get(pessoa.id)?.[0],
       benefits: beneficios.get(pessoa.id) || [],
@@ -145,22 +147,33 @@ export async function listarPessoas(token) {
   });
 }
 
-function agruparPor(linhas, coluna) {
+export async function alterarStatusPessoa(id: string, status: "ativo" | "inativo", token: string): Promise<void> {
+	await requisicaoSupabase(`/rest/v1/pessoas_atendidas?id=eq.${encodeURIComponent(id)}`, {
+		token,
+		metodo: "PATCH",
+		corpo: { status },
+		preferencia: "return=minimal",
+	});
+}
+
+function agruparPor(linhas: any[], coluna: string): Map<any, any[]> {
   const grupos = new Map();
   for (const linha of linhas) grupos.set(linha[coluna], [...(grupos.get(linha[coluna]) || []), linha]);
   return grupos;
 }
 
-async function carregarVinculos(tabelaVinculo, tabelaCatalogo, colunaId, colunaNome, filtroPessoas, token) {
-  const vinculos = await requisicaoSupabase(`/rest/v1/${tabelaVinculo}?select=pessoa_atendida_id,${colunaId}&pessoa_atendida_id=in.(${filtroPessoas})`, { token });
+async function carregarVinculos(tabelaVinculo: string, tabelaCatalogo: string, colunaId: string, colunaNome: string, filtroPessoas: string, token: string): Promise<Map<any, any[]>> {
+  const vinculos = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/${tabelaVinculo}?select=pessoa_atendida_id,${colunaId}&pessoa_atendida_id=in.(${filtroPessoas})`, { token });
   if (!vinculos.length) return new Map();
   const ids = [...new Set(vinculos.map((item) => item[colunaId]))].map(encodeURIComponent).join(",");
-  const catalogo = await requisicaoSupabase(`/rest/v1/${tabelaCatalogo}?select=id,${colunaNome}&id=in.(${ids})`, { token });
+  const catalogo = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/${tabelaCatalogo}?select=id,${colunaNome}&id=in.(${ids})`, { token });
   const nomes = new Map(catalogo.map((item) => [item.id, item[colunaNome]]));
   return agruparPor(vinculos.map((item) => ({ pessoa_atendida_id: item.pessoa_atendida_id, nome: nomes.get(item[colunaId]) })).filter((item) => item.nome), "pessoa_atendida_id");
 }
 
-function converterPessoa(pessoa, familia = {}, relacionados = {}) {
+function converterPessoa(pessoa: any, familia: any = {}, relacionados: any = {}): any {
+  const nomesProgramas: Record<string, string> = { 'Projeto "MÃ£os que Transformam"': "Projeto MÃ£os que Transformam", 'Projeto "EntrelaÃ§os"': "Projeto EntrelaÃ§os" };
+  const nomesBeneficios: Record<string, string> = { "BenefÃ­cio de PrestaÃ§Ã£o Continuada - BPC": "BPC", "Programa AuxÃ­lio Brasil": "AuxÃ­lio Brasil" };
   return {
     ...pessoa,
     id: pessoa.id,
@@ -260,20 +273,20 @@ function converterPessoa(pessoa, familia = {}, relacionados = {}) {
     workPhone: pessoa.telefone_trabalho,
     pastWorkHistory: pessoa.historico_profissional,
     notes: pessoa.observacoes_gerais,
-    activities: (relacionados.activities || []).map((item) => item.nome),
-    programs: (relacionados.programs || []).map((item) => ({ 'Projeto "Mãos que Transformam"': "Projeto Mãos que Transformam", 'Projeto "Entrelaços"': "Projeto Entrelaços" }[item.nome] || item.nome)),
-    benefits: (relacionados.benefits || []).map((item) => ({ "Benefício de Prestação Continuada - BPC": "BPC", "Programa Auxílio Brasil": "Auxílio Brasil" }[item.nome] || item.nome)),
+    activities: (relacionados.activities || []).map((item: any) => item.nome),
+    programs: (relacionados.programs || []).map((item: any) => nomesProgramas[item.nome] || item.nome),
+    benefits: (relacionados.benefits || []).map((item: any) => nomesBeneficios[item.nome] || item.nome),
   };
 }
 
-const colunasFamilia = {
+const colunasFamilia: Record<string, string> = {
   address: "endereco", neighborhood: "bairro", reference: "ponto_referencia", phone: "telefone", householdSize: "quantidade_moradores",
   postalCode: "cep", state: "estado", municipality: "municipio", street: "logradouro", addressNumber: "numero_endereco", addressComplement: "complemento",
   residenceSinceYear: "mora_desde_ano", riskArea: "area_risco", housingType: "tipo_moradia", roomCount: "numero_comodos", wallMaterial: "material_paredes",
   floorMaterial: "material_piso", roofMaterial: "material_telhado", waterSupply: "abastecimento_agua", lighting: "forma_iluminacao",
   sewageDestination: "destino_esgoto", garbageDestination: "destino_lixo", cadunico: "cadunico", householdSubstanceUse: "uso_substancias_psicoativas",
 };
-const colunasPessoa = {
+const colunasPessoa: Record<string, string> = {
   name: "nome_completo", birthDate: "data_nascimento", sex: "sexo", rg: "rg", rgIssuer: "emissor_rg", nis: "nis", cpf: "cpf", phone: "telefone",
   phoneWhatsapp: "telefone_whatsapp", email: "email", school: "escola", schoolStatus: "situacao_escolar", schoolInstitution: "instituicao_ensino",
   grade: "serie_ano", shift: "turno", workCard: "carteira_trabalho", workCardSeries: "serie_carteira_trabalho", voterRegistration: "titulo_eleitor",
@@ -287,9 +300,9 @@ const colunasPessoa = {
   otherRelationships: "outros_vinculos",
 };
 
-function traduzirFormulario(dados) {
-  const familia = {};
-  const pessoa = {};
+function traduzirFormulario(dados: Record<string, any>): { familia: Record<string, any>; pessoa: Record<string, any> } {
+  const familia: Record<string, any> = {};
+  const pessoa: Record<string, any> = {};
   for (const [campo, coluna] of Object.entries(colunasFamilia)) if (dados[campo] !== undefined) familia[coluna] = dados[campo] === "" ? null : dados[campo];
   for (const [campo, coluna] of Object.entries(colunasPessoa)) if (dados[campo] !== undefined) pessoa[coluna] = dados[campo] === "" ? null : dados[campo];
   for (const campo of ["riskArea", "cadunico", "phoneWhatsapp", "workCard", "canLeaveAlone", "usesMedication", "seekingWork"]) {
@@ -312,34 +325,34 @@ function traduzirFormulario(dados) {
   return { familia, pessoa };
 }
 
-async function gravarLinha(tabela, dados, token, id) {
+async function gravarLinha(tabela: string, dados: any, token: string, id?: string): Promise<any> {
   const caminho = id ? `/rest/v1/${tabela}?id=eq.${encodeURIComponent(id)}` : `/rest/v1/${tabela}`;
   const linhas = await requisicaoSupabase(caminho, { token, metodo: id ? "PATCH" : "POST", corpo: dados, preferencia: "return=representation" });
   return linhas?.[0];
 }
 
-const catalogos = {
-  pessoa_beneficio: { tabela: "catalogo_beneficios", chave: "beneficio_id", nomes: { BPC: "Benefício de Prestação Continuada - BPC", "Auxílio Brasil": "Programa Auxílio Brasil" } },
-  pessoa_atividade_interesse: { tabela: "catalogo_atividades", chave: "atividade_id", dados: "activities", nomes: {} },
-  pessoa_programa_interesse: { tabela: "catalogo_programas", chave: "programa_id", dados: "programs", nomes: { "Projeto Mãos que Transformam": 'Projeto "Mãos que Transformam"', "Projeto Entrelaços": 'Projeto "Entrelaços"' } },
+const catalogos: Record<string, { tabela: string; chave: string; nomes: Record<string, string> }> = {
+  pessoa_beneficio: { tabela: "catalogo_beneficios", chave: "beneficio_id", nomes: { BPC: "BenefÃ­cio de PrestaÃ§Ã£o Continuada - BPC", "AuxÃ­lio Brasil": "Programa AuxÃ­lio Brasil" } },
+  pessoa_atividade_interesse: { tabela: "catalogo_atividades", chave: "atividade_id", nomes: {} },
+  pessoa_programa_interesse: { tabela: "catalogo_programas", chave: "programa_id", nomes: { "Projeto MÃ£os que Transformam": 'Projeto "MÃ£os que Transformam"', "Projeto EntrelaÃ§os": 'Projeto "EntrelaÃ§os"' } },
 };
 
-async function sincronizarVinculos(tabelaVinculo, idPessoa, valores, token, detalheOutro = null) {
+async function sincronizarVinculos(tabelaVinculo: keyof typeof catalogos, idPessoa: string, valores: string[], token: string, detalheOutro: string | null = null): Promise<void> {
   const config = catalogos[tabelaVinculo];
   await requisicaoSupabase(`/rest/v1/${tabelaVinculo}?pessoa_atendida_id=eq.${encodeURIComponent(idPessoa)}`, { token, metodo: "DELETE" });
   const nomes = [...new Set((valores || []).filter(Boolean).map((nome) => config.nomes[nome] || nome))];
   if (!nomes.length) return;
   const parametros = nomes.map((nome) => `"${nome.replaceAll('"', '\\"')}"`).join(",");
-  const opcoes = await requisicaoSupabase(`/rest/v1/${config.tabela}?select=id,nome&nome=in.(${encodeURIComponent(parametros)})`, { token });
+  const opcoes = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/${config.tabela}?select=id,nome&nome=in.(${encodeURIComponent(parametros)})`, { token });
   const porNome = new Map(opcoes.map((item) => [item.nome, item.id]));
-  const vinculos = nomes.flatMap((nome) => porNome.has(nome) ? [{ pessoa_atendida_id: idPessoa, [config.chave]: porNome.get(nome), ...(tabelaVinculo === "pessoa_beneficio" && nome === "Outro benefício" && detalheOutro ? { detalhe_outro: detalheOutro } : {}) }] : []);
+  const vinculos = nomes.flatMap((nome) => porNome.has(nome) ? [{ pessoa_atendida_id: idPessoa, [config.chave]: porNome.get(nome), ...(tabelaVinculo === "pessoa_beneficio" && nome === "Outro benefÃ­cio" && detalheOutro ? { detalhe_outro: detalheOutro } : {}) }] : []);
   if (vinculos.length) await requisicaoSupabase(`/rest/v1/${tabelaVinculo}`, { token, metodo: "POST", corpo: vinculos, preferencia: "return=minimal" });
 }
 
-async function sincronizarResponsaveis(dados, pessoaId, familiaId, token) {
+async function sincronizarResponsaveis(dados: Record<string, any>, pessoaId: string, familiaId: string, token: string): Promise<void> {
   const responsaveis = [
-    { id: dados.mae_responsavel_id, nome_completo: dados.motherName, parentesco: "Mãe/responsável", data_nascimento: dados.motherBirthDate || null, trabalha: dados.motherWorks === "" ? null : dados.motherWorks === "true", trabalho_ou_fonte_renda: dados.motherIncome, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
-    { id: dados.pai_responsavel_id, nome_completo: dados.fatherName, parentesco: "Pai/responsável", data_nascimento: dados.fatherBirthDate || null, trabalha: dados.fatherWorks === "" ? null : dados.fatherWorks === "true", trabalho_ou_fonte_renda: dados.fatherIncome, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
+    { id: dados.mae_responsavel_id, nome_completo: dados.motherName, parentesco: "MÃ£e/responsÃ¡vel", data_nascimento: dados.motherBirthDate || null, trabalha: dados.motherWorks === "" ? null : dados.motherWorks === "true", trabalho_ou_fonte_renda: dados.motherIncome, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
+    { id: dados.pai_responsavel_id, nome_completo: dados.fatherName, parentesco: "Pai/responsÃ¡vel", data_nascimento: dados.fatherBirthDate || null, trabalha: dados.fatherWorks === "" ? null : dados.fatherWorks === "true", trabalho_ou_fonte_renda: dados.fatherIncome, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
   ].filter((responsavel) => responsavel.nome_completo?.trim());
   const idsMantidos = new Set(responsaveis.map((responsavel) => responsavel.id).filter(Boolean));
   for (const idAntigo of [dados.mae_responsavel_id, dados.pai_responsavel_id].filter(Boolean)) {
@@ -354,12 +367,12 @@ async function sincronizarResponsaveis(dados, pessoaId, familiaId, token) {
   }
 }
 
-export async function salvarPessoa(dados, token) {
+export async function salvarPessoa(dados: Record<string, any>, token: string): Promise<any> {
   const { familia, pessoa } = traduzirFormulario(dados);
   familia.criado_em_cadastro = pessoa.data_entrada;
   const responsaveis = [
-    { nome_completo: dados.motherName, parentesco: "Mãe/responsável", data_nascimento: dados.motherBirthDate || null, trabalha: dados.motherWorks === "" ? null : dados.motherWorks === "true", trabalho_ou_fonte_renda: dados.motherIncome || null, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
-    { nome_completo: dados.fatherName, parentesco: "Pai/responsável", data_nascimento: dados.fatherBirthDate || null, trabalha: dados.fatherWorks === "" ? null : dados.fatherWorks === "true", trabalho_ou_fonte_renda: dados.fatherIncome || null, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
+    { nome_completo: dados.motherName, parentesco: "MÃ£e/responsÃ¡vel", data_nascimento: dados.motherBirthDate || null, trabalha: dados.motherWorks === "" ? null : dados.motherWorks === "true", trabalho_ou_fonte_renda: dados.motherIncome || null, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
+    { nome_completo: dados.fatherName, parentesco: "Pai/responsÃ¡vel", data_nascimento: dados.fatherBirthDate || null, trabalha: dados.fatherWorks === "" ? null : dados.fatherWorks === "true", trabalho_ou_fonte_renda: dados.fatherIncome || null, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
   ].filter((responsavel) => responsavel.nome_completo?.trim());
   const id = await requisicaoSupabase("/rest/v1/rpc/salvar_cadastro_completo", {
     token,
@@ -377,3 +390,5 @@ export async function salvarPessoa(dados, token) {
   const registros = await listarPessoas(token);
   return registros.find((registro) => registro.id === id) || { ...dados, id, familia_id: dados.familia_id };
 }
+
+
