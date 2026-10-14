@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
-const caminhoEnv = fileURLToPath(new URL("../.env", import.meta.url));
+const caminhoEnv = resolve(__dirname, "../.env");
 
 /** Carrega backend/.env sem substituir variáveis definidas pelo ambiente de execução. */
 export async function carregarVariaveisBackend(): Promise<void> {

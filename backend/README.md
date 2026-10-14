@@ -1,4 +1,4 @@
-# Configuração do Supabase
+# API NestJS e Supabase
 
 1. Copie `backend/.env.example` para `backend/.env`.
 2. Preencha `SUPABASE_URL` e `SUPABASE_ANON_KEY` com os dados do projeto Supabase.
@@ -6,8 +6,8 @@
 
 `backend/.env` é ignorado pelo Git. O helper `src/env.ts` lê o arquivo sem sobrescrever variáveis já definidas no ambiente e valida a URL e a chave pública antes da conexão.
 
-O servidor `frontend/server.mjs` lê `backend/.env` ao iniciar e disponibiliza somente a URL do projeto e a chave anon no endpoint local `/api/config`. A chave `service_role` nunca é enviada ao navegador.
+O backend NestJS lê `backend/.env`. O Next.js encaminha as rotas `/api/*` para a API, que acrescenta a chave pública do projeto e repassa o token da sessão do usuário às chamadas Supabase. A chave `service_role` não é necessária e nunca é enviada ao navegador.
 
 O login usa o Supabase Auth e exige um perfil ativo em `public.perfis_acesso`. O pedido de acesso cria apenas uma solicitação pendente; a conta precisa ser criada e liberada por uma pessoa administradora. O módulo de cadastros lê e grava os dados usando o token do usuário e as políticas RLS.
 
-Antes de usar, aplique as migrations `001` a `005` em ordem no projeto Supabase. Depois reinicie o servidor com `npm start`. Não habilite cadastro público de usuários no Supabase Auth.
+Antes de usar, aplique as migrations `001` a `005` em ordem no projeto Supabase. Inicie a aplicação com `npm run dev`. Não habilite cadastro público de usuários no Supabase Auth.
