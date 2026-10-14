@@ -1,26 +1,65 @@
 # Sistema Renascer
 
-Módulo institucional de cadastro e recepção. Inclui autenticação Supabase, controle de acesso por perfil, cadastro de pessoas e famílias, vínculos com responsáveis, benefícios, atividades, programas e consentimentos.
+Sistema institucional para cadastro e recepção do Instituto de Ação Social Renascer.
 
-## Executar
+## O que está implementado
 
-Requer Node.js 18 ou superior. Configure `backend/.env` com `SUPABASE_URL` e `SUPABASE_ANON_KEY`, aplique as migrations e inicie o servidor:
+- Aplicacao web em Next.js, React, TypeScript e Tailwind CSS.
+- API NestJS com verificacao de saúde e encaminhamento seguro ao Supabase.
+- Login institucional com perfil ativo, solicitação de acesso e recuperacao de senha.
+- Cadastro em sete etapas, consulta, edição, busca, filtros por idade e prioridade, impressao e exportacao CSV.
+- Inativacao e reativação de cadastros sem apagar o histórico.
+- Relatórios agregados sobre cadastros ativos, faixa etária, sexo informado e forma de entrada.
+- Persistencia atomica do cadastro e vinculos atraves da função SQL versionada.
+- Controle de acesso no banco por Row Level Security (RLS).
 
-```bash
-npm start
-```
+Atendimentos sociais e psicológicos, atividades e frequência, estoque, financeiro, parceiros e patrimonio continuam fora do escopo implementado. O plano de desenvolvimento registra esses módulos, mas eles dependem de regras, formularios e permissões validados pelo Instituto. A navegacao apresenta somente telas implementadas.
 
-Abra o endereço local exibido no terminal, normalmente `http://127.0.0.1:4173`.
+## Requisitos
 
-## Configurar o Supabase
+- Node.js 20 ou superior.
+- Projeto Supabase configurado.
+- Perfil institucional ativo para cada usuario da equipe.
 
-1. Aplique, nesta ordem, os arquivos em `backend/supabase/migrations/` (`001` a `005`).
-2. Crie a conta inicial no Supabase Authentication.
-3. Como administradora, inclua o UUID dessa conta em `public.perfis_acesso` com o papel `admin`.
-4. Entre no sistema e crie os demais perfis pela área administrativa do Supabase.
+## Configuração local
 
-O pedido de cadastro de usuário fica pendente e não cria uma conta automaticamente. Não habilite o cadastro público no Supabase Auth. A chave `SUPABASE_SERVICE_ROLE_KEY` não é necessária para o uso da aplicação e nunca deve ser disponibilizada no navegador.
+1. Instale as dependências na raiz do repositório:
 
-O caminho `/?visualizar=mockados` mostra somente dados fictícios em memória para prévia visual. Esses registros não são enviados ao Supabase.
+   ```bash
+   npm install
+   ```
 
-Fotos e documentos assinados ainda não são enviados ao Storage. Configure um bucket privado e políticas específicas antes de habilitar esses uploads. O texto do termo de consentimento deve ser fornecido e aprovado pelo Instituto.
+2. Copie `backend/.env.example` para `backend/.env` e informe `SUPABASE_URL` e `SUPABASE_ANON_KEY`. Nunca coloque a chave `SUPABASE_SERVICE_ROLE_KEY` no frontend.
+3. Execute as migrations `001` a `005`, em ordem, no SQL Editor do Supabase.
+4. Crie ou convide usuários pelo Supabase Auth. Insira o UUID, nome e papel do primeiro administrador em `public.perfis_acesso`; o exemplo está comentado ao final da migration `001`.
+5. Inicie os dois servicos:
+
+   ```bash
+   npm run dev
+   ```
+
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:3001/api` (status da API)
+- Health check: `http://localhost:3001/api/health`
+
+A seed `backend/supabase/seeds/001_dados_mock.sql` e opcional e serve somente para desenvolvimento. Ela cria registros fictícios no banco; não execute em produção.
+
+## Comandos
+
+- `npm run dev`: inicia Next.js e NestJS em conjunto.
+- `npm run build`: compila frontend e backend.
+- `npm run start`: inicia os builds de produção.
+
+Em hospedagem, configure `API_URL` no ambiente do frontend e `WEB_ORIGIN` no backend. `PORT`, `HOST` e `SUPABASE_URL`/`SUPABASE_ANON_KEY` tambem devem ser definidos conforme o ambiente.
+
+## Estrutura
+
+- `frontend/app`: rotas, telas e componentes React.
+- `frontend/src/supabase.ts`: chamadas de autenticacao e persistencia.
+- `frontend/public`: arquivos estáticos usados pela interface.
+- `backend/src`: API NestJS e carregamento de configuração.
+- `backend/supabase/migrations`: schema, políticas RLS e operacoes atomicas.
+- `backend/supabase/seeds`: dados demonstrativos opcionais.
+- `PLANO_DESENVOLVIMENTO.md`: escopo futuro e dependências de validação com o Instituto.
+
+O sistema nao envia fotos nem armazena documentos assinados. Esses fluxos precisam de configuração de armazenamento privado e validação institucional antes de serem habilitados.

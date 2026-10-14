@@ -3,13 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "workspaces": ["frontend", "backend"],
   "scripts": {
-    "start": "node frontend/server.mjs",
-    "cadastro:terminal": "tsx backend/src/cadastro.ts"
+    "dev": "concurrently -k -n web,api -c cyan,magenta \"npm run dev -w frontend\" \"npm run start:dev -w backend\"",
+    "build": "npm run build -w frontend && npm run build -w backend",
+    "start": "concurrently -k -n web,api -c cyan,magenta \"npm run start -w frontend\" \"npm run start:prod -w backend\""
   },
   "devDependencies": {
+    "concurrently": "^9.1.0",
     "@types/node": "^22.10.0",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }

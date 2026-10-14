@@ -4,7 +4,7 @@
 
 Desenvolver um sistema web próprio, sob domínio e propriedade do Instituto, que integre as informações sociais e administrativas hoje mantidas em fichas impressas, cadernos e planilhas. Os dados sociais alimentam também relatórios e prestação de contas dos projetos; por isso, os módulos precisam compartilhar cadastros e regras de acesso.
 
-Este plano foi organizado a partir da transcrição e do resumo da reunião, além do protótipo atual em `backend/src/cadastro.ts`. A reunião definiu começar pelo fluxo de entrada/cadastro, que já tem processo mais claro, e evoluir módulo por módulo com demonstrações e validações periódicas da equipe do Instituto. Não há prazos neste plano.
+Este plano foi organizado a partir da transcrição, do resumo da reunião e do protótipo legado de cadastro, migrado para a aplicação Next.js e para o esquema Supabase versionado. A reunião definiu começar pelo fluxo de entrada/cadastro, que já tem processo mais claro, e evoluir módulo por módulo com demonstrações e validações periódicas da equipe do Instituto. Não há prazos neste plano.
 
 ## Divisão entre dois desenvolvedores
 
@@ -271,5 +271,5 @@ Os gráficos e relatórios devem ser construídos junto aos módulos de origem e
 - `Transcricao_Completa_Reuniao_Instituto_Renascer.pdf`
 - `Resumo_Reuniao_Instituto_Renascer.pdf`
 - `Instituto Renascer Backlog.pdf`
-- Protótipo inicial: `backend/src/cadastro.ts`
+- Protótipo inicial: migrado para `frontend/app` e `backend/supabase/migrations`.
 
