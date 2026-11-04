@@ -39,7 +39,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen bg-[#2f2450] text-[#302942] md:h-screen md:overflow-hidden print:h-auto print:overflow-visible print:bg-white">
       <Sidebar ativo={item} />
-      <div ref={painel} className="painel-principal min-h-screen bg-[#f7f5f2] md:h-screen md:overflow-y-auto md:rounded-3xl print:h-auto print:overflow-visible print:rounded-none">
+      <div ref={painel} className="painel-principal min-h-screen bg-[#f7f5f2] md:h-screen md:overflow-y-auto print:h-auto print:overflow-visible">
         <div key={caminho} className="animar-pagina">{children}</div>
       </div>
     </main>
