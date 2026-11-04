@@ -1,4 +1,13 @@
 ﻿const CHAVE_SESSAO = "renascer.supabase.session";
+
+export type Papel = "admin" | "recepcao" | "psicologo" | "assistente_social";
+export type AreaAtendimento = "social" | "psicologico";
+const PAPEIS_VALIDOS: string[] = ["admin", "recepcao", "psicologo", "assistente_social"];
+/** Perfis que somente consultam o cadastro (sem criar, editar ou inativar). */
+export const PAPEIS_SO_LEITURA_CADASTRO: string[] = ["psicologo", "assistente_social"];
+/** Perfis que abrem o módulo de atendimentos (a coordenação vê apenas a área social). */
+export const PAPEIS_ATENDIMENTOS: string[] = ["psicologo", "assistente_social", "admin"];
+export const AREA_DO_PAPEL: Record<string, AreaAtendimento | undefined> = { psicologo: "psicologico", assistente_social: "social" };
 let configuracaoPromise;
 type LinhaSupabase = Record<string, any>;
 
@@ -19,6 +28,8 @@ export function obterSessao() {
 export function salvarSessao(sessao: any): void {
   if (sessao) sessionStorage.setItem(CHAVE_SESSAO, JSON.stringify(sessao));
   else sessionStorage.removeItem(CHAVE_SESSAO);
+  // Avisa a estrutura das páginas (barra lateral) para aparecer ou sumir na hora.
+  window.dispatchEvent(new Event("renascer:sessao"));
 }
 
 async function requisicaoSupabase<T = any>(caminho: string, { token, metodo = "GET", corpo, preferencia, renovar = true }: { token?: string; metodo?: string; corpo?: any; preferencia?: string; renovar?: boolean } = {}): Promise<T> {
@@ -66,16 +77,18 @@ export async function entrar(email: string, senha: string): Promise<any> {
   });
   const perfis = await requisicaoSupabase(`/rest/v1/perfis_acesso?user_id=eq.${encodeURIComponent(sessao.user.id)}&select=nome,papel,ativo&limit=1`, { token: sessao.access_token });
   const perfil = perfis?.[0];
-  if (!perfil?.ativo || !["admin", "recepcao", "tecnico_social"].includes(perfil.papel)) {
+  if (!perfil?.ativo || !PAPEIS_VALIDOS.includes(perfil.papel)) {
     await requisicaoSupabase("/auth/v1/logout", { metodo: "POST", token: sessao.access_token }).catch(() => {});
-    throw new Error("Este usuÃ¡rio ainda nÃ£o tem um perfil institucional ativo. PeÃ§a Ã  administraÃ§Ã£o para liberar o acesso.");
+    throw new Error("Este usuário ainda não tem um perfil institucional ativo. Peça à administração para liberar o acesso.");
   }
+  try { sessionStorage.removeItem("renascer.ultima.rota"); } catch { /* sem armazenamento */ }
   salvarSessao({ ...sessao, perfil });
   return perfil;
 }
 
 export async function sair() {
   const sessao = obterSessao();
+  try { sessionStorage.removeItem("renascer.ultima.rota"); } catch { /* sem armazenamento */ }
   salvarSessao(null);
   if (sessao?.access_token) await requisicaoSupabase("/auth/v1/logout", { metodo: "POST", token: sessao.access_token }).catch(() => {});
 }
@@ -91,12 +104,12 @@ export async function solicitarRedefinicaoSenha(email: string): Promise<void> {
   if (!resposta.ok) {
     let erro;
     try { erro = await resposta.json(); } catch { erro = null; }
-    throw new Error(erro?.msg || erro?.message || "NÃ£o foi possÃ­vel solicitar a redefiniÃ§Ã£o. Tente novamente.");
+    throw new Error(erro?.msg || erro?.message || "Não foi possível solicitar a redefinição. Tente novamente.");
   }
 }
 
 export async function atualizarSenha(senha: string, token = obterSessao()?.access_token): Promise<any> {
-  if (!token) throw new Error("Sua sessÃ£o de redefiniÃ§Ã£o expirou. Solicite um novo link.");
+  if (!token) throw new Error("Sua sessão de redefinição expirou. Solicite um novo link.");
   return requisicaoSupabase("/auth/v1/user", { token, metodo: "PUT", corpo: { password: senha } });
 }
 
@@ -110,41 +123,96 @@ export async function solicitarAcesso({ nome, email, area }: { nome: string; ema
   if (!resposta.ok) {
     let erro;
     try { erro = await resposta.json(); } catch { erro = null; }
-    throw new Error(erro?.message || "NÃ£o foi possÃ­vel enviar a solicitaÃ§Ã£o. Tente novamente mais tarde.");
+    throw new Error(erro?.message || "Não foi possível enviar a solicitação. Tente novamente mais tarde.");
   }
 }
 
-export async function listarPessoas(token: string, status: "ativo" | "inativo" | "todos" = "ativo"): Promise<any[]> {
-	const filtroStatus = status === "todos" ? "" : `&status=eq.${status}`;
-	const pessoas = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/pessoas_atendidas?select=*&order=criado_em.desc${filtroStatus}`, { token });
-  if (!pessoas.length) return [];
-  const idsFamilia = [...new Set(pessoas.map((pessoa) => pessoa.familia_id).filter(Boolean))];
-  const queryFamilias = idsFamilia.map(encodeURIComponent).join(",");
-  const familias: LinhaSupabase[] = queryFamilias ? await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/familias?select=*&id=in.(${queryFamilias})`, { token }) : [];
-  const porId = new Map(familias.map((familia) => [familia.id, familia]));
-  const idsPessoa = pessoas.map((pessoa) => pessoa.id);
-  const filtroPessoas = idsPessoa.map(encodeURIComponent).join(",");
-  const [responsaveis, consentimentos, beneficios, atividades, programas] = await Promise.all([
-    requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/responsaveis_familiares?select=*&pessoa_atendida_id=in.(${filtroPessoas})`, { token }),
-    requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/consentimentos_cadastro?select=*&pessoa_atendida_id=in.(${filtroPessoas})&order=criado_em.desc`, { token }),
-    carregarVinculos("pessoa_beneficio", "catalogo_beneficios", "beneficio_id", "nome", filtroPessoas, token),
-    carregarVinculos("pessoa_atividade_interesse", "catalogo_atividades", "atividade_id", "nome", filtroPessoas, token),
-    carregarVinculos("pessoa_programa_interesse", "catalogo_programas", "programa_id", "nome", filtroPessoas, token),
-  ]);
-  const porPessoaResponsaveis = agruparPor(responsaveis, "pessoa_atendida_id");
-  const porPessoaConsentimento = agruparPor(consentimentos, "pessoa_atendida_id");
-  return pessoas.map((pessoa) => {
-    const familiares = porPessoaResponsaveis.get(pessoa.id) || [];
-    const relacionados = {
-      mae: familiares.find((item) => /mÃ£e/i.test(item.parentesco || "")),
-      pai: familiares.find((item) => /pai/i.test(item.parentesco || "")),
-      consentimento: porPessoaConsentimento.get(pessoa.id)?.[0],
-      benefits: beneficios.get(pessoa.id) || [],
-      activities: atividades.get(pessoa.id) || [],
-      programs: programas.get(pessoa.id) || [],
-    };
-    return converterPessoa(pessoa, porId.get(pessoa.familia_id), relacionados);
+const SELECT_CADASTRO = "*,familia:familias(*),responsaveis:responsaveis_familiares(*),consentimentos:consentimentos_cadastro(*),beneficios:pessoa_beneficio(detalhe_outro,catalogo:catalogo_beneficios(nome)),atividades:pessoa_atividade_interesse(catalogo:catalogo_atividades(nome)),programas:pessoa_programa_interesse(catalogo:catalogo_programas(nome))";
+
+/** Converte a linha com tudo embutido (uma única consulta) no formato usado pela interface. */
+function montarPessoa(linha: LinhaSupabase): any {
+  const { familia, responsaveis, consentimentos, beneficios, atividades, programas, ...pessoa } = linha;
+  const familiares: LinhaSupabase[] = responsaveis || [];
+  const consentimento = [...(consentimentos || [])].sort((a, b) => String(b.criado_em).localeCompare(String(a.criado_em)))[0];
+  const nomes = (lista?: LinhaSupabase[]) => (lista || []).map((item) => ({ nome: item.catalogo?.nome })).filter((item) => item.nome);
+  return converterPessoa(pessoa, familia || {}, {
+    mae: familiares.find((item) => /mãe/i.test(item.parentesco || "")),
+    pai: familiares.find((item) => /pai/i.test(item.parentesco || "")),
+    consentimento,
+    benefits: nomes(beneficios),
+    activities: nomes(atividades),
+    programs: nomes(programas),
   });
+}
+
+async function carregarCadastros(filtro: string, token: string): Promise<any[]> {
+  const linhas = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/pessoas_atendidas?select=${encodeURIComponent(SELECT_CADASTRO)}${filtro}`, { token });
+  return linhas.map(montarPessoa);
+}
+
+export async function obterPessoa(id: string, token: string): Promise<any | null> {
+  return (await carregarCadastros(`&id=eq.${encodeURIComponent(id)}&limit=1`, token))[0] ?? null;
+}
+
+export type FiltrosCadastro = { status: "ativo" | "inativo" | "todos"; busca: string; faixa: "all" | "child" | "teen" | "adult"; prioridade: "all" | "priority" | "regular" };
+export const TAMANHO_PAGINA_CADASTROS = 50;
+
+async function idsDaPagina(filtros: FiltrosCadastro, offset: number, limite: number, token: string): Promise<{ total: number; ids: string[] }> {
+  return requisicaoSupabase("/rest/v1/rpc/listar_cadastros_ids", {
+    token, metodo: "POST",
+    corpo: { p_status: filtros.status, p_busca: filtros.busca, p_faixa: filtros.faixa, p_prioridade: filtros.prioridade, p_limite: limite, p_offset: offset },
+  });
+}
+
+/** Uma página da listagem: duas consultas, não importa quantos cadastros existam. */
+export async function listarCadastrosPagina(filtros: FiltrosCadastro, offset: number, token: string, limite = TAMANHO_PAGINA_CADASTROS): Promise<{ itens: any[]; total: number }> {
+  const { total, ids } = await idsDaPagina(filtros, offset, limite, token);
+  if (!ids.length) return { itens: [], total };
+  const ordem = new Map(ids.map((id, indice) => [id, indice]));
+  const itens = await carregarCadastros(`&id=in.(${ids.join(",")})`, token);
+  itens.sort((a, b) => (ordem.get(a.id) ?? 0) - (ordem.get(b.id) ?? 0));
+  return { itens, total };
+}
+
+export async function estatisticasCadastro(status: FiltrosCadastro["status"], token: string): Promise<{ total: number; menores: number; prioritarios: number; familias: number }> {
+  return requisicaoSupabase("/rest/v1/rpc/estatisticas_cadastro", { token, metodo: "POST", corpo: { p_status: status } });
+}
+
+/** Todos os cadastros do filtro, em lotes enxutos, para exportação. */
+export async function listarCadastrosParaExportar(filtros: FiltrosCadastro, token: string): Promise<any[]> {
+  const ids: string[] = [];
+  for (let offset = 0; ; offset += 200) {
+    const pagina = await idsDaPagina(filtros, offset, 200, token);
+    ids.push(...pagina.ids);
+    if (pagina.ids.length < 200 || ids.length >= pagina.total) break;
+  }
+  const colunas = "id,nome_completo,data_nascimento,escola,forma_entrada,situacao_prioritaria,status,familia:familias(bairro)";
+  const lotes: string[][] = [];
+  for (let i = 0; i < ids.length; i += 100) lotes.push(ids.slice(i, i + 100));
+  const linhas: LinhaSupabase[] = [];
+  for (let i = 0; i < lotes.length; i += 4) {
+    const grupo = await Promise.all(lotes.slice(i, i + 4).map((lote) => requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/pessoas_atendidas?select=${encodeURIComponent(colunas)}&id=in.(${lote.join(",")})`, { token })));
+    linhas.push(...grupo.flat());
+  }
+  const ordem = new Map(ids.map((id, indice) => [id, indice]));
+  linhas.sort((a, b) => (ordem.get(a.id) ?? 0) - (ordem.get(b.id) ?? 0));
+  return linhas.map((linha) => ({ name: linha.nome_completo, birthDate: linha.data_nascimento, school: linha.escola, neighborhood: linha.familia?.bairro, referralSource: linha.forma_entrada, priority: linha.situacao_prioritaria, status: linha.status }));
+}
+
+/** Dados enxutos para os relatórios, lidos em páginas de 1.000 (limite da API). */
+export async function listarDadosRelatorio(token: string): Promise<any[]> {
+  const colunas = "id,data_nascimento,sexo,forma_entrada,motivo_encaminhamento,situacao_prioritaria,escola,data_entrada,familia_id,familia:familias(bairro)";
+  const tamanho = 1000;
+  const resultado: any[] = [];
+  for (let offset = 0; offset < 200000; offset += tamanho) {
+    const lote = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/pessoas_atendidas?select=${encodeURIComponent(colunas)}&status=eq.ativo&order=id.asc&limit=${tamanho}&offset=${offset}`, { token });
+    if (!lote.length) break;
+    resultado.push(...lote.map((linha) => ({
+      id: linha.id, birthDate: linha.data_nascimento, sex: linha.sexo, referralSource: linha.forma_entrada, referralReason: linha.motivo_encaminhamento,
+      priority: linha.situacao_prioritaria, school: linha.escola, entryDate: linha.data_entrada, family_id: linha.familia_id, neighborhood: linha.familia?.bairro,
+    })));
+  }
+  return resultado;
 }
 
 export async function alterarStatusPessoa(id: string, status: "ativo" | "inativo", token: string): Promise<void> {
@@ -156,24 +224,91 @@ export async function alterarStatusPessoa(id: string, status: "ativo" | "inativo
 	});
 }
 
-function agruparPor(linhas: any[], coluna: string): Map<any, any[]> {
-  const grupos = new Map();
-  for (const linha of linhas) grupos.set(linha[coluna], [...(grupos.get(linha[coluna]) || []), linha]);
-  return grupos;
+const BUCKET_CADASTROS = "cadastros-privados";
+export const LIMITE_ARQUIVO_BYTES = 5 * 1024 * 1024;
+export const TIPOS_FOTO = ["image/jpeg", "image/png"];
+export const TIPOS_TERMO = ["application/pdf", "image/jpeg", "image/png"];
+
+const extensaoDoTipo = (tipo: string) => (tipo === "application/pdf" ? "pdf" : tipo === "image/png" ? "png" : "jpg");
+
+/** Valida tipo e tamanho antes do envio; devolve a mensagem de erro ou uma string vazia. */
+export function validarArquivo(arquivo: File, tiposAceitos: string[]): string {
+  if (!tiposAceitos.includes(arquivo.type)) return `Formato não aceito (${arquivo.name}). Use ${tiposAceitos.map((tipo) => extensaoDoTipo(tipo).toUpperCase()).join(", ")}.`;
+  if (arquivo.size > LIMITE_ARQUIVO_BYTES) return `O arquivo ${arquivo.name} passa de 5 MB.`;
+  return "";
 }
 
-async function carregarVinculos(tabelaVinculo: string, tabelaCatalogo: string, colunaId: string, colunaNome: string, filtroPessoas: string, token: string): Promise<Map<any, any[]>> {
-  const vinculos = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/${tabelaVinculo}?select=pessoa_atendida_id,${colunaId}&pessoa_atendida_id=in.(${filtroPessoas})`, { token });
-  if (!vinculos.length) return new Map();
-  const ids = [...new Set(vinculos.map((item) => item[colunaId]))].map(encodeURIComponent).join(",");
-  const catalogo = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/${tabelaCatalogo}?select=id,${colunaNome}&id=in.(${ids})`, { token });
-  const nomes = new Map(catalogo.map((item) => [item.id, item[colunaNome]]));
-  return agruparPor(vinculos.map((item) => ({ pessoa_atendida_id: item.pessoa_atendida_id, nome: nomes.get(item[colunaId]) })).filter((item) => item.nome), "pessoa_atendida_id");
+async function enviarArquivo(caminho: string, arquivo: File, token: string): Promise<void> {
+  const config = await configuracao();
+  const resposta = await fetch(`${config.url}/storage/v1/object/${BUCKET_CADASTROS}/${caminho}`, {
+    method: "POST",
+    headers: { apikey: config.anonKey, Authorization: `Bearer ${token}`, "Content-Type": arquivo.type },
+    body: arquivo,
+  });
+  if (!resposta.ok) {
+    let erro;
+    try { erro = await resposta.json(); } catch { erro = null; }
+    throw new Error(erro?.message || erro?.error || "Não foi possível enviar o arquivo.");
+  }
+}
+
+export async function baixarArquivoCadastro(caminho: string, token: string): Promise<Blob> {
+  const config = await configuracao();
+  const resposta = await fetch(`${config.url}/storage/v1/object/authenticated/${BUCKET_CADASTROS}/${caminho}`, {
+    headers: { apikey: config.anonKey, Authorization: `Bearer ${token}` },
+  });
+  if (!resposta.ok) throw new Error("Não foi possível abrir o arquivo.");
+  return resposta.blob();
+}
+
+async function removerArquivo(caminho: string, token: string): Promise<void> {
+  const config = await configuracao();
+  await fetch(`${config.url}/storage/v1/object/${BUCKET_CADASTROS}/${caminho}`, {
+    method: "DELETE",
+    headers: { apikey: config.anonKey, Authorization: `Bearer ${token}` },
+  });
+}
+
+/** Envia a foto para o bucket privado, grava o caminho no cadastro e remove a foto anterior. */
+export async function anexarFoto(pessoaId: string, arquivo: File, caminhoAnterior: string | null | undefined, token: string): Promise<string> {
+  const erro = validarArquivo(arquivo, TIPOS_FOTO);
+  if (erro) throw new Error(erro);
+  const caminho = `fotos/${pessoaId}/${crypto.randomUUID()}.${extensaoDoTipo(arquivo.type)}`;
+  await enviarArquivo(caminho, arquivo, token);
+  try {
+    await requisicaoSupabase(`/rest/v1/pessoas_atendidas?id=eq.${encodeURIComponent(pessoaId)}`, {
+      token, metodo: "PATCH", corpo: { foto_storage_path: caminho }, preferencia: "return=minimal",
+    });
+  } catch (falha) {
+    await removerArquivo(caminho, token).catch(() => {});
+    throw falha;
+  }
+  if (caminhoAnterior) await removerArquivo(caminhoAnterior, token).catch(() => {});
+  return caminho;
+}
+
+/** Envia o termo assinado e só então marca o consentimento como assinado. */
+export async function anexarTermoAssinado(pessoaId: string, consentimentoId: string, arquivo: File, versaoTermo: string | null, caminhoAnterior: string | null | undefined, token: string): Promise<string> {
+  const erro = validarArquivo(arquivo, TIPOS_TERMO);
+  if (erro) throw new Error(erro);
+  const caminho = `termos/${pessoaId}/${crypto.randomUUID()}.${extensaoDoTipo(arquivo.type)}`;
+  await enviarArquivo(caminho, arquivo, token);
+  try {
+    await requisicaoSupabase(`/rest/v1/consentimentos_cadastro?id=eq.${encodeURIComponent(consentimentoId)}`, {
+      token, metodo: "PATCH", preferencia: "return=minimal",
+      corpo: { status: "assinado", assinado_em: new Date().toISOString(), documento_storage_path: caminho, versao_termo: versaoTermo || null },
+    });
+  } catch (falha) {
+    await removerArquivo(caminho, token).catch(() => {});
+    throw falha;
+  }
+  if (caminhoAnterior) await removerArquivo(caminhoAnterior, token).catch(() => {});
+  return caminho;
 }
 
 function converterPessoa(pessoa: any, familia: any = {}, relacionados: any = {}): any {
-  const nomesProgramas: Record<string, string> = { 'Projeto "MÃ£os que Transformam"': "Projeto MÃ£os que Transformam", 'Projeto "EntrelaÃ§os"': "Projeto EntrelaÃ§os" };
-  const nomesBeneficios: Record<string, string> = { "BenefÃ­cio de PrestaÃ§Ã£o Continuada - BPC": "BPC", "Programa AuxÃ­lio Brasil": "AuxÃ­lio Brasil" };
+  const nomesProgramas: Record<string, string> = { 'Projeto "Mãos que Transformam"': "Projeto Mãos que Transformam", 'Projeto "Entrelaços"': "Projeto Entrelaços" };
+  const nomesBeneficios: Record<string, string> = { "Benefício de Prestação Continuada - BPC": "BPC", "Programa Auxílio Brasil": "Auxílio Brasil" };
   return {
     ...pessoa,
     id: pessoa.id,
@@ -266,6 +401,9 @@ function converterPessoa(pessoa: any, familia: any = {}, relacionados: any = {})
     additionalContactRelation: pessoa.contato_adicional_vinculo,
     consentStatus: relacionados.consentimento?.status || "pendente",
     consentVersion: relacionados.consentimento?.versao_termo,
+    consentId: relacionados.consentimento?.id,
+    consentDocumentPath: relacionados.consentimento?.documento_storage_path,
+    photoPath: pessoa.foto_storage_path,
     seekingWork: pessoa.procura_trabalho == null ? "" : String(pessoa.procura_trabalho),
     currentProfession: pessoa.profissao_atual,
     currentEmployer: pessoa.empresa_atual,
@@ -332,9 +470,9 @@ async function gravarLinha(tabela: string, dados: any, token: string, id?: strin
 }
 
 const catalogos: Record<string, { tabela: string; chave: string; nomes: Record<string, string> }> = {
-  pessoa_beneficio: { tabela: "catalogo_beneficios", chave: "beneficio_id", nomes: { BPC: "BenefÃ­cio de PrestaÃ§Ã£o Continuada - BPC", "AuxÃ­lio Brasil": "Programa AuxÃ­lio Brasil" } },
+  pessoa_beneficio: { tabela: "catalogo_beneficios", chave: "beneficio_id", nomes: { BPC: "Benefício de Prestação Continuada - BPC", "Auxílio Brasil": "Programa Auxílio Brasil" } },
   pessoa_atividade_interesse: { tabela: "catalogo_atividades", chave: "atividade_id", nomes: {} },
-  pessoa_programa_interesse: { tabela: "catalogo_programas", chave: "programa_id", nomes: { "Projeto MÃ£os que Transformam": 'Projeto "MÃ£os que Transformam"', "Projeto EntrelaÃ§os": 'Projeto "EntrelaÃ§os"' } },
+  pessoa_programa_interesse: { tabela: "catalogo_programas", chave: "programa_id", nomes: { "Projeto Mãos que Transformam": 'Projeto "Mãos que Transformam"', "Projeto Entrelaços": 'Projeto "Entrelaços"' } },
 };
 
 async function sincronizarVinculos(tabelaVinculo: keyof typeof catalogos, idPessoa: string, valores: string[], token: string, detalheOutro: string | null = null): Promise<void> {
@@ -345,14 +483,14 @@ async function sincronizarVinculos(tabelaVinculo: keyof typeof catalogos, idPess
   const parametros = nomes.map((nome) => `"${nome.replaceAll('"', '\\"')}"`).join(",");
   const opcoes = await requisicaoSupabase<LinhaSupabase[]>(`/rest/v1/${config.tabela}?select=id,nome&nome=in.(${encodeURIComponent(parametros)})`, { token });
   const porNome = new Map(opcoes.map((item) => [item.nome, item.id]));
-  const vinculos = nomes.flatMap((nome) => porNome.has(nome) ? [{ pessoa_atendida_id: idPessoa, [config.chave]: porNome.get(nome), ...(tabelaVinculo === "pessoa_beneficio" && nome === "Outro benefÃ­cio" && detalheOutro ? { detalhe_outro: detalheOutro } : {}) }] : []);
+  const vinculos = nomes.flatMap((nome) => porNome.has(nome) ? [{ pessoa_atendida_id: idPessoa, [config.chave]: porNome.get(nome), ...(tabelaVinculo === "pessoa_beneficio" && nome === "Outro benefício" && detalheOutro ? { detalhe_outro: detalheOutro } : {}) }] : []);
   if (vinculos.length) await requisicaoSupabase(`/rest/v1/${tabelaVinculo}`, { token, metodo: "POST", corpo: vinculos, preferencia: "return=minimal" });
 }
 
 async function sincronizarResponsaveis(dados: Record<string, any>, pessoaId: string, familiaId: string, token: string): Promise<void> {
   const responsaveis = [
-    { id: dados.mae_responsavel_id, nome_completo: dados.motherName, parentesco: "MÃ£e/responsÃ¡vel", data_nascimento: dados.motherBirthDate || null, trabalha: dados.motherWorks === "" ? null : dados.motherWorks === "true", trabalho_ou_fonte_renda: dados.motherIncome, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
-    { id: dados.pai_responsavel_id, nome_completo: dados.fatherName, parentesco: "Pai/responsÃ¡vel", data_nascimento: dados.fatherBirthDate || null, trabalha: dados.fatherWorks === "" ? null : dados.fatherWorks === "true", trabalho_ou_fonte_renda: dados.fatherIncome, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
+    { id: dados.mae_responsavel_id, nome_completo: dados.motherName, parentesco: "Mãe/responsável", data_nascimento: dados.motherBirthDate || null, trabalha: dados.motherWorks === "" ? null : dados.motherWorks === "true", trabalho_ou_fonte_renda: dados.motherIncome, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
+    { id: dados.pai_responsavel_id, nome_completo: dados.fatherName, parentesco: "Pai/responsável", data_nascimento: dados.fatherBirthDate || null, trabalha: dados.fatherWorks === "" ? null : dados.fatherWorks === "true", trabalho_ou_fonte_renda: dados.fatherIncome, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
   ].filter((responsavel) => responsavel.nome_completo?.trim());
   const idsMantidos = new Set(responsaveis.map((responsavel) => responsavel.id).filter(Boolean));
   for (const idAntigo of [dados.mae_responsavel_id, dados.pai_responsavel_id].filter(Boolean)) {
@@ -371,8 +509,8 @@ export async function salvarPessoa(dados: Record<string, any>, token: string): P
   const { familia, pessoa } = traduzirFormulario(dados);
   familia.criado_em_cadastro = pessoa.data_entrada;
   const responsaveis = [
-    { nome_completo: dados.motherName, parentesco: "MÃ£e/responsÃ¡vel", data_nascimento: dados.motherBirthDate || null, trabalha: dados.motherWorks === "" ? null : dados.motherWorks === "true", trabalho_ou_fonte_renda: dados.motherIncome || null, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
-    { nome_completo: dados.fatherName, parentesco: "Pai/responsÃ¡vel", data_nascimento: dados.fatherBirthDate || null, trabalha: dados.fatherWorks === "" ? null : dados.fatherWorks === "true", trabalho_ou_fonte_renda: dados.fatherIncome || null, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
+    { nome_completo: dados.motherName, parentesco: "Mãe/responsável", data_nascimento: dados.motherBirthDate || null, trabalha: dados.motherWorks === "" ? null : dados.motherWorks === "true", trabalho_ou_fonte_renda: dados.motherIncome || null, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
+    { nome_completo: dados.fatherName, parentesco: "Pai/responsável", data_nascimento: dados.fatherBirthDate || null, trabalha: dados.fatherWorks === "" ? null : dados.fatherWorks === "true", trabalho_ou_fonte_renda: dados.fatherIncome || null, telefone: dados.phone || null, whatsapp: dados.phoneWhatsapp === "" ? null : dados.phoneWhatsapp === "true", email: dados.email || null },
   ].filter((responsavel) => responsavel.nome_completo?.trim());
   const id = await requisicaoSupabase("/rest/v1/rpc/salvar_cadastro_completo", {
     token,
@@ -387,8 +525,145 @@ export async function salvarPessoa(dados: Record<string, any>, token: string): P
       p_consentimento: { status: dados.consentStatus || "pendente", versao_termo: dados.consentVersion || null },
     },
   });
-  const registros = await listarPessoas(token);
-  return registros.find((registro) => registro.id === id) || { ...dados, id, familia_id: dados.familia_id };
+  return (await obterPessoa(id, token)) || { ...dados, id, familia_id: dados.familia_id };
 }
 
 
+
+// ---------------------------------------------------------------------------
+// Atendimentos sociais e psicológicos (migration 007)
+// As regras de acesso valem no banco; a interface apenas reflete o perfil.
+// ---------------------------------------------------------------------------
+
+export type Encaminhamento = { id: string; destino: string; destino_outro?: string | null; data: string; situacao: "encaminhado" | "em_andamento" | "concluido" | "sem_retorno"; retorno?: string | null };
+export type Atendimento = {
+  id: string; area: AreaAtendimento; data_hora: string; tipo?: string | null; profissional?: string | null; meu: boolean;
+  versao: number; total_versoes: number; atualizado_em: string; motivo?: string | null; relato?: string | null; combinados?: string | null;
+  encaminhamentos: Encaminhamento[];
+};
+export type NovoAtendimento = {
+  pessoaId: string; area: AreaAtendimento; dataHora: string; tipoId: string | null; motivo: string; relato: string; combinados: string;
+  encaminhamentos: { destino_id: string; destino_outro: string; data: string }[];
+};
+
+export const SITUACOES_ENCAMINHAMENTO: Record<Encaminhamento["situacao"], string> = {
+  encaminhado: "Encaminhado", em_andamento: "Em andamento", concluido: "Concluído", sem_retorno: "Sem retorno",
+};
+
+export async function buscarPessoasParaAtendimento(termo: string, token: string): Promise<{ id: string; nome_completo: string; data_nascimento: string; status: string }[]> {
+  const texto = termo.trim().replace(/[*,()%]/g, " ").trim();
+  if (texto.length < 2) return [];
+  return requisicaoSupabase(`/rest/v1/pessoas_atendidas?select=id,nome_completo,data_nascimento,status&nome_completo=ilike.${encodeURIComponent(`*${texto}*`)}&order=nome_completo.asc&limit=20`, { token });
+}
+
+export async function listarCatalogosAtendimento(token: string): Promise<{ tipos: { id: string; nome: string }[]; destinos: { id: string; nome: string }[] }> {
+  const [tipos, destinos] = await Promise.all([
+    requisicaoSupabase<{ id: string; nome: string }[]>("/rest/v1/tipos_atendimento?select=id,nome&ativo=eq.true&order=nome.asc", { token }),
+    requisicaoSupabase<{ id: string; nome: string }[]>("/rest/v1/destinos_encaminhamento?select=id,nome&ativo=eq.true&order=nome.asc", { token }),
+  ]);
+  return { tipos, destinos };
+}
+
+/** Devolve só o que o perfil pode ver e registra no banco quem abriu o histórico. */
+export async function listarHistoricoAtendimentos(pessoaId: string, token: string): Promise<Atendimento[]> {
+  return (await requisicaoSupabase("/rest/v1/rpc/listar_historico_atendimentos", { token, metodo: "POST", corpo: { p_pessoa: pessoaId } })) || [];
+}
+
+export async function registrarAtendimento(dados: NovoAtendimento, token: string): Promise<string> {
+  return requisicaoSupabase("/rest/v1/rpc/registrar_atendimento", {
+    token, metodo: "POST",
+    corpo: {
+      p_pessoa: dados.pessoaId, p_area: dados.area, p_data_hora: new Date(dados.dataHora).toISOString(), p_tipo: dados.tipoId || null,
+      p_motivo: dados.motivo, p_relato: dados.relato, p_combinados: dados.combinados,
+      p_encaminhamentos: dados.encaminhamentos.filter((item) => item.destino_id || item.destino_outro.trim()),
+    },
+  });
+}
+
+/** Correção = nova versão; a anterior continua no histórico. */
+export async function corrigirAtendimento(atendimentoId: string, dados: { motivo: string; relato: string; combinados: string }, token: string): Promise<number> {
+  return requisicaoSupabase("/rest/v1/rpc/corrigir_atendimento", {
+    token, metodo: "POST",
+    corpo: { p_atendimento: atendimentoId, p_motivo: dados.motivo, p_relato: dados.relato, p_combinados: dados.combinados },
+  });
+}
+
+export async function atualizarSituacaoEncaminhamento(encaminhamentoId: string, situacao: Encaminhamento["situacao"], retorno: string, token: string): Promise<void> {
+  await requisicaoSupabase("/rest/v1/encaminhamento_eventos", {
+    token, metodo: "POST", preferencia: "return=minimal",
+    corpo: { encaminhamento_id: encaminhamentoId, situacao, retorno: retorno.trim() || null },
+  });
+}
+
+/** Registra para quem o histórico foi emitido (ex.: Vara da Infância). */
+export async function registrarEmissaoHistorico(pessoaId: string, area: AreaAtendimento, destinatario: string, token: string): Promise<void> {
+  await requisicaoSupabase("/rest/v1/emissoes_historico", {
+    token, metodo: "POST", preferencia: "return=minimal",
+    corpo: { pessoa_atendida_id: pessoaId, area, destinatario: destinatario.trim() },
+  });
+}
+
+// Acessos temporários (somente coordenação)
+export type AcessoTemporario = { id: string; usuario_id: string; area: AreaAtendimento; valido_ate: string; revogado: boolean };
+
+export async function listarPerfisAcesso(token: string): Promise<{ user_id: string; nome: string; papel: string; ativo: boolean }[]> {
+  return requisicaoSupabase("/rest/v1/perfis_acesso?select=user_id,nome,papel,ativo&ativo=eq.true&order=nome.asc", { token });
+}
+
+export async function listarAcessosTemporarios(token: string): Promise<AcessoTemporario[]> {
+  return requisicaoSupabase("/rest/v1/acessos_temporarios?select=id,usuario_id,area,valido_ate,revogado&revogado=eq.false&valido_ate=gt." + encodeURIComponent(new Date().toISOString()) + "&order=valido_ate.asc", { token });
+}
+
+export async function concederAcessoTemporario(usuarioId: string, area: AreaAtendimento, dias: number, token: string): Promise<void> {
+  const validoAte = new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString();
+  await requisicaoSupabase("/rest/v1/acessos_temporarios", {
+    token, metodo: "POST", preferencia: "return=minimal", corpo: { usuario_id: usuarioId, area, valido_ate: validoAte },
+  });
+}
+
+export async function revogarAcessoTemporario(id: string, token: string): Promise<void> {
+  await requisicaoSupabase(`/rest/v1/acessos_temporarios?id=eq.${encodeURIComponent(id)}`, {
+    token, metodo: "PATCH", preferencia: "return=minimal", corpo: { revogado: true },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Gerenciamento de usuários (somente coordenação)
+// Criar conta e redefinir senha passam pelo backend, que guarda a chave administrativa.
+// ---------------------------------------------------------------------------
+
+export type UsuarioSistema = { id: string; email: string; nome: string; papel: Papel | null; ativo: boolean; ultimoAcesso: string | null; criadoEm: string | null };
+export type SolicitacaoAcesso = { id: string; nome: string; email: string; area: string; criado_em: string };
+
+async function requisicaoApi<T = any>(caminho: string, token: string, { metodo = "GET", corpo }: { metodo?: string; corpo?: unknown } = {}): Promise<T> {
+  const resposta = await fetch(`/api/admin/usuarios${caminho}`, {
+    method: metodo,
+    headers: { Authorization: `Bearer ${token}`, ...(corpo !== undefined ? { "Content-Type": "application/json" } : {}) },
+    ...(corpo !== undefined ? { body: JSON.stringify(corpo) } : {}),
+  }).catch(() => null);
+  if (!resposta) throw new Error("Não foi possível falar com o servidor. Verifique se a API está em execução.");
+  const texto = await resposta.text();
+  let dados: any = null;
+  try { dados = texto ? JSON.parse(texto) : null; } catch { dados = null; }
+  if (!resposta.ok) throw new Error(dados?.message || "Não foi possível concluir a operação.");
+  return dados as T;
+}
+
+export const listarUsuarios = (token: string) => requisicaoApi<UsuarioSistema[]>("", token);
+export const criarUsuario = (dados: { nome: string; email: string; papel: Papel }, token: string) =>
+  requisicaoApi<{ id: string; email: string; senhaTemporaria: string }>("", token, { metodo: "POST", corpo: dados });
+export const atualizarUsuario = (id: string, dados: { nome?: string; papel?: Papel; ativo?: boolean }, token: string) =>
+  requisicaoApi<{ ok: boolean }>(`/${encodeURIComponent(id)}`, token, { metodo: "PATCH", corpo: dados });
+export const gerarNovaSenhaTemporaria = (id: string, token: string) =>
+  requisicaoApi<{ senhaTemporaria: string }>(`/${encodeURIComponent(id)}/senha`, token, { metodo: "POST" });
+
+export async function listarSolicitacoesAcesso(token: string): Promise<SolicitacaoAcesso[]> {
+  return requisicaoSupabase("/rest/v1/solicitacoes_acesso?select=id,nome,email,area,criado_em&status=eq.pendente&order=criado_em.asc", { token });
+}
+
+export async function resolverSolicitacaoAcesso(id: string, status: "aprovada" | "recusada", revisorId: string, token: string): Promise<void> {
+  await requisicaoSupabase(`/rest/v1/solicitacoes_acesso?id=eq.${encodeURIComponent(id)}`, {
+    token, metodo: "PATCH", preferencia: "return=minimal",
+    corpo: { status, revisado_em: new Date().toISOString(), revisado_por: revisorId },
+  });
+}

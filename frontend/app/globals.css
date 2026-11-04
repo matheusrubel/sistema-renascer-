@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "../src/styles.css";
 @import "../src/auth.css";
+@import "../src/ui.css";
 
 * { box-sizing: border-box; }
 body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
