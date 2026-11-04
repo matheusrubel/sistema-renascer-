@@ -126,7 +126,7 @@ export default function AtendimentosPage() {
 
   const cabecalho = <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-[#e8e3dc] pb-5">
     <div><h1 className="mt-3 text-3xl font-semibold">Atendimentos</h1>
-      <p className="mt-2 text-sm text-gray-500">Registros sigilosos de atendimento e encaminhamentos. {ROTULO_PAPEL[papel] ? `Perfil: ${ROTULO_PAPEL[papel]}.` : ""}</p></div>
+      <p className="mt-2 text-sm text-gray-500">Registros sigilosos de atendimento e encaminhamentos.</p></div>
     
   </header>;
 
@@ -138,8 +138,8 @@ export default function AtendimentosPage() {
     {erro && <p role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-800">{erro}</p>}
 
     <section aria-label="Buscar pessoa" className="rounded-2xl border border-[#eee9e2] bg-white p-5">
-      <label className="text-sm font-medium" htmlFor="busca-pessoa">Buscar pessoa atendida pelo nome</label>
-      <input id="busca-pessoa" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Digite ao menos 2 letras" className={`${campo} mt-2 max-w-lg`} />
+      <label className="block text-sm font-medium text-[#3a3254]" htmlFor="busca-pessoa">Buscar pessoa atendida pelo nome</label>
+      <input id="busca-pessoa" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Digite ao menos 2 letras" className={`${campo} mt-2 block max-w-lg`} />
       {resultados.length > 0 && <ul className="mt-3 divide-y divide-[#f0ede8] rounded-xl border border-[#eee9e2]">
         {resultados.map((r) => <li key={r.id}><button onClick={() => selecionar(r)} className="flex w-full justify-between px-3.5 py-2 text-left text-sm hover:bg-[#faf9f7]"><span className="font-medium">{r.nome_completo}</span><span className="text-gray-500">{formatarData(r.data_nascimento)}{r.status === "inativo" ? " · inativo" : ""}</span></button></li>)}
       </ul>}
