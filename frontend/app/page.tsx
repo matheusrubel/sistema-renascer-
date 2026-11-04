@@ -1,12 +1,51 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { alterarStatusPessoa, listarPessoas, obterSessao, sair, salvarPessoa } from "../src/supabase";
+import { alterarStatusPessoa, anexarFoto, anexarTermoAssinado, baixarArquivoCadastro, estatisticasCadastro, listarCadastrosPagina, listarCadastrosParaExportar, obterSessao, PAPEIS_SO_LEITURA_CADASTRO, sair, salvarPessoa, type FiltrosCadastro, TIPOS_FOTO, TIPOS_TERMO, validarArquivo } from "../src/supabase";
+import { imprimirTermo, TERMO_VERSAO } from "./termo-consentimento";
 import { AuthPanel } from "./auth-panel";
+import { BotaoIcone } from "./botao-icone";
+import { useDialogos } from "@/components/dialogos";
+import { ChevronLeft, ChevronRight, FileCheck2, FileText, Pencil, Printer, UserCheck, UserX } from "lucide-react";
 import { recordFormMarkup } from "./form-markup";
 
 type Person = { id: string; name: string; birthDate?: string; school?: string; neighborhood?: string; priority?: string; family_id?: string; [field: string]: any };
+
+/** Marca o campo e mostra a mensagem dentro da página (no lugar da bolha padrão do navegador). */
+function mostrarErroCampo(campo: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, mensagem = "Preencha este campo.") {
+  const caixa = campo.closest("label") ?? campo.parentElement;
+  if (!caixa || caixa.querySelector(".erro-campo")) return;
+  campo.classList.add("campo-invalido");
+  campo.setAttribute("aria-invalid", "true");
+  const aviso = document.createElement("small");
+  aviso.className = "erro-campo";
+  aviso.setAttribute("role", "alert");
+  aviso.textContent = mensagem;
+  caixa.appendChild(aviso);
+  const limpar = () => {
+    campo.classList.remove("campo-invalido");
+    campo.removeAttribute("aria-invalid");
+    aviso.remove();
+    campo.removeEventListener("input", limpar);
+    campo.removeEventListener("change", limpar);
+  };
+  campo.addEventListener("input", limpar);
+  campo.addEventListener("change", limpar);
+}
+
+/** Números de página exibidos, com reticências quando há muitas (ex.: 1 … 4 5 6 … 20). */
+function paginasVisiveis(atual: number, ultima: number): (number | "…")[] {
+  if (ultima <= 7) return Array.from({ length: ultima }, (_, i) => i + 1);
+  const itens: (number | "…")[] = [1];
+  const inicio = Math.max(2, atual - 1);
+  const fim = Math.min(ultima - 1, atual + 1);
+  if (inicio > 2) itens.push("…");
+  for (let p = inicio; p <= fim; p++) itens.push(p);
+  if (fim < ultima - 1) itens.push("…");
+  itens.push(ultima);
+  return itens;
+}
 
 function calcularIdade(date?: string) {
   if (!date) return null;
@@ -18,7 +57,16 @@ function calcularIdade(date?: string) {
   return age >= 0 ? age : null;
 }
 
-function imprimirFicha(person: any) {
+function blobParaDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(String(leitor.result));
+    leitor.onerror = () => reject(leitor.error);
+    leitor.readAsDataURL(blob);
+  });
+}
+
+async function imprimirFicha(person: any, token: string) {
   const rows = [
     ["Nome", person.name], ["Nascimento", person.birthDate], ["Sexo", person.sex], ["Estado civil", person.maritalStatus], ["RG", person.rg], ["CPF", person.cpf], ["NIS", person.nis], ["Carteira de trabalho", person.workCard === "true" ? "Sim" : person.workCard === "false" ? "Não" : ""],
     ["Escola", person.school], ["Série/ano", person.grade], ["Turno", person.shift], ["Bairro/território", person.neighborhood], ["Telefone", person.phone], ["Endereço", person.address], ["Ponto de referência", person.reference],
@@ -29,15 +77,27 @@ function imprimirFicha(person: any) {
   const escape = (value: unknown) => { const map: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }; return String(value ?? "").replace(/[&<>"']/g, char => map[char] ?? char); };
   const win = window.open("", "_blank", "width=850,height=900");
   if (!win) return;
-  win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Ficha cadastral - ${escape(person.name)}</title><style>body{font:14px Arial,sans-serif;color:#292535;margin:32px}header{border-bottom:2px solid #332652;padding-bottom:14px;margin-bottom:20px}h1{font-size:22px;margin:0 0 4px;color:#332652}p{color:#67766b;font-size:12px;margin:0}table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid #dce4dc;padding:9px 8px;vertical-align:top}th{width:28%;color:#516755;font-weight:600}footer{margin-top:28px;border-top:1px solid #dce4dc;padding-top:12px;color:#78847b;font-size:11px}@media print{body{margin:15mm}}</style></head><body><header><h1>Instituto de Ação Social Renascer</h1><p>Ficha de entrada e cadastro — impressão para uso institucional</p></header><table>${rows.map(([label, value]) => `<tr><th>${escape(label)}</th><td>${escape(value)}</td></tr>`).join("")}</table><footer>Documento com dados pessoais. Manter sob acesso autorizado.</footer><script>window.onload=()=>window.print()<\/script></body></html>`);
+  let fotoUrl = "";
+  if (person.photoPath) {
+    try { fotoUrl = await blobParaDataUrl(await baixarArquivoCadastro(person.photoPath, token)); } catch { fotoUrl = ""; }
+  }
+  win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Ficha cadastral - ${escape(person.name)}</title><style>body{font:14px Arial,sans-serif;color:#292535;margin:32px}header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:2px solid #332652;padding-bottom:14px;margin-bottom:20px}img.foto{width:96px;height:120px;object-fit:cover;border:1px solid #dce4dc;border-radius:4px}h1{font-size:22px;margin:0 0 4px;color:#332652}p{color:#67766b;font-size:12px;margin:0}table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid #dce4dc;padding:9px 8px;vertical-align:top}th{width:28%;color:#516755;font-weight:600}footer{margin-top:28px;border-top:1px solid #dce4dc;padding-top:12px;color:#78847b;font-size:11px}@media print{body{margin:15mm}}</style></head><body><header><div><h1>Instituto de Ação Social Renascer</h1><p>Ficha de entrada e cadastro — impressão para uso institucional</p></div>${fotoUrl ? `<img class="foto" alt="Foto de identificação" src="${fotoUrl}">` : ""}</header><table>${rows.map(([label, value]) => `<tr><th>${escape(label)}</th><td>${escape(value)}</td></tr>`).join("")}</table><footer>Documento com dados pessoais. Manter sob acesso autorizado.</footer><script>window.onload=()=>window.print()<\/script></body></html>`);
   win.document.close();
 }
 
 export default function Home() {
   const [session, setSession] = useState<any>(null);
+  const { confirmar } = useDialogos();
   const [sessionChecked, setSessionChecked] = useState(false);
   const [people, setPeople] = useState<Person[]>([]);
   const [search, setSearch] = useState("");
+  const [busca, setBusca] = useState("");
+  const [total, setTotal] = useState(0);
+  const [estatisticas, setEstatisticas] = useState<{ total: number; menores: number; prioritarios: number; familias: number } | null>(null);
+  const [versaoDados, setVersaoDados] = useState(0);
+  const [pagina, setPagina] = useState(1);
+  const [porPagina, setPorPagina] = useState(10);
+  const [exportando, setExportando] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -45,22 +105,43 @@ export default function Home() {
   const [ageFilter, setAgeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [recordStatus, setRecordStatus] = useState<"ativo" | "inativo" | "todos">("ativo");
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   useEffect(() => {
     setSession(obterSessao());
     setSessionChecked(true);
   }, []);
+  const filtros: FiltrosCadastro = { status: recordStatus, busca, faixa: ageFilter as FiltrosCadastro["faixa"], prioridade: statusFilter as FiltrosCadastro["prioridade"] };
   useEffect(() => {
     if (!session?.access_token) return;
     let cancelled = false;
     setLoading(true);
     setError("");
-    listarPessoas(session.access_token, recordStatus)
-      .then((records) => { if (!cancelled) setPeople(records); })
+    listarCadastrosPagina(filtros, (pagina - 1) * porPagina, session.access_token, porPagina)
+      .then(({ itens, total: quantidade }) => {
+        if (cancelled) return;
+        // Se a página ficou vazia (ex.: último item inativado), volta uma página.
+        if (!itens.length && pagina > 1) { setPagina(atual => Math.max(1, atual - 1)); return; }
+        setPeople(itens); setTotal(quantidade);
+      })
       .catch((e: Error) => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [session, recordStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, recordStatus, busca, ageFilter, statusFilter, pagina, porPagina, versaoDados]);
+  // Qualquer mudança de filtro ou de tamanho da página volta para a primeira página.
+  useEffect(() => { setPagina(1); }, [recordStatus, busca, ageFilter, statusFilter, porPagina]);
+  useEffect(() => {
+    if (!session?.access_token) return;
+    let cancelled = false;
+    estatisticasCadastro(recordStatus, session.access_token)
+      .then((valores) => { if (!cancelled) setEstatisticas(valores); })
+      .catch(() => { if (!cancelled) setEstatisticas(null); });
+    return () => { cancelled = true; };
+  }, [session, recordStatus, versaoDados]);
+  // Espera a pessoa parar de digitar antes de consultar o servidor.
+  useEffect(() => {
+    const espera = setTimeout(() => setBusca(search.trim()), 350);
+    return () => clearTimeout(espera);
+  }, [search]);
   useEffect(() => {
     if (!showForm) return;
     const container = document.querySelector<HTMLElement>("#record-form-container");
@@ -90,11 +171,37 @@ export default function Home() {
     updateOtherBenefit();
     const photoInput = form.querySelector<HTMLInputElement>('input[name="photo"]');
     const photoPreview = form.querySelector<HTMLElement>("#photo-preview");
+    const mostrarStatusArquivo = (elemento: HTMLElement | null, mensagem: string, erro = false) => {
+      if (!elemento) return;
+      elemento.hidden = !mensagem;
+      elemento.textContent = mensagem;
+      elemento.style.color = erro ? "#a33a2c" : "";
+    };
     const updatePhoto = () => {
       const file = photoInput?.files?.[0];
-      if (photoPreview) { photoPreview.hidden = !file; photoPreview.textContent = file ? `Foto selecionada: ${file.name} (não enviada)` : ""; }
+      const invalido = file ? validarArquivo(file, TIPOS_FOTO) : "";
+      mostrarStatusArquivo(photoPreview, invalido || (file ? `Foto selecionada: ${file.name} (será enviada ao salvar)` : editing?.photoPath ? "Foto cadastrada. Escolha outra para substituir." : ""), Boolean(invalido));
     };
     photoInput?.addEventListener("change", updatePhoto);
+    updatePhoto();
+    const documentInput = form.querySelector<HTMLInputElement>('input[name="consentDocument"]');
+    const documentStatus = form.querySelector<HTMLElement>("#consent-document-status");
+    const updateDocument = () => {
+      const file = documentInput?.files?.[0];
+      const invalido = file ? validarArquivo(file, TIPOS_TERMO) : "";
+      mostrarStatusArquivo(documentStatus, invalido || (file ? `Arquivo selecionado: ${file.name} (será enviado ao salvar)` : editing?.consentDocumentPath ? "Termo assinado já anexado. Escolha outro arquivo para substituir." : ""), Boolean(invalido));
+    };
+    documentInput?.addEventListener("change", updateDocument);
+    updateDocument();
+    const versionInput = form.querySelector<HTMLInputElement>('input[name="consentVersion"]');
+    if (!editing && versionInput && !versionInput.value) versionInput.value = TERMO_VERSAO;
+    const printConsent = form.querySelector<HTMLButtonElement>("#print-consent");
+    const printConsentHandler = () => {
+      const dados = { ...(editing || {}), ...Object.fromEntries(new FormData(form).entries()) };
+      if (versionInput && !versionInput.value) versionInput.value = TERMO_VERSAO;
+      imprimirTermo(dados);
+    };
+    printConsent?.addEventListener("click", printConsentHandler);
     const today = new Date().toISOString().slice(0, 10);
     form.querySelectorAll<HTMLInputElement>('input[type="date"]').forEach(input => { input.max = today; });
     const sections = Array.from(form.querySelectorAll<HTMLElement>(".form-section"));
@@ -117,22 +224,53 @@ export default function Home() {
     const saveHandler = async (event: SubmitEvent) => {
       event.preventDefault();
       const invalid = sections.findIndex(section => Array.from(section.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input,select,textarea")).some(field => field.required && !field.value));
-      if (invalid >= 0) { showStep(invalid); sections[invalid].querySelector<HTMLElement>(":invalid")?.focus(); return; }
+      if (invalid >= 0) { showStep(invalid); { const campoInvalido = sections[invalid].querySelector<HTMLInputElement>(":invalid"); if (campoInvalido) { campoInvalido.focus(); mostrarErroCampo(campoInvalido); } } return; }
+      const photoFile = photoInput?.files?.[0];
+      const documentFile = documentInput?.files?.[0];
+      const consentSelect = form.querySelector<HTMLSelectElement>('select[name="consentStatus"]');
+      const erroFoto = photoFile ? validarArquivo(photoFile, TIPOS_FOTO) : "";
+      const exigeTermo = consentSelect?.value === "assinado" && editing?.consentStatus !== "assinado" && !documentFile;
+      const erroTermo = documentFile ? validarArquivo(documentFile, TIPOS_TERMO) : exigeTermo ? "Anexe o termo assinado e digitalizado para marcar como “Assinado e recebido”." : "";
+      const bloqueio = erroFoto ? { campo: photoInput, area: photoPreview, mensagem: erroFoto } : erroTermo ? { campo: documentInput, area: documentStatus, mensagem: erroTermo } : null;
+      if (bloqueio) {
+        mostrarStatusArquivo(bloqueio.area, bloqueio.mensagem, true);
+        const indice = sections.findIndex(section => bloqueio.campo && section.contains(bloqueio.campo));
+        if (indice >= 0) showStep(indice);
+        bloqueio.area?.scrollIntoView({ block: "center" });
+        return;
+      }
       const fd = new FormData(form);
       const data: Record<string, any> = { ...(editing || {}), ...Object.fromEntries(fd.entries()) };
       delete data.photo;
+      delete data.consentDocument;
+      // O status só vira "assinado" depois que o documento é gravado com sucesso.
+      if (documentFile && editing?.consentStatus !== "assinado") data.consentStatus = "pendente";
       for (const key of ["activities", "programs", "benefits", "healthConditions", "allergies", "disabilities", "demands"]) data[key] = fd.getAll(key);
       data.consentSignedAt = data.consentStatus === "assinado" ? new Date().toISOString() : null;
       data.priority = String(data.priority || "").trim();
       try {
-        await salvarPessoa(data, session.access_token);
-        setPeople(await listarPessoas(session.access_token, recordStatus));
-        setShowForm(false); setEditing(null); setError("");
+        const salvo = await salvarPessoa(data, session.access_token);
+        const falhas: string[] = [];
+        if (photoFile) {
+          try { await anexarFoto(salvo.id, photoFile, editing?.photoPath, session.access_token); }
+          catch (e) { falhas.push(`foto (${(e as Error).message})`); }
+        }
+        if (documentFile) {
+          try {
+            if (!salvo.consentId) throw new Error("registro de consentimento não encontrado");
+            await anexarTermoAssinado(salvo.id, salvo.consentId, documentFile, data.consentVersion || null, editing?.consentDocumentPath, session.access_token);
+          } catch (e) { falhas.push(`termo assinado (${(e as Error).message})`); }
+        }
+        // Recarrega só o cadastro salvo (não a lista inteira) e o mescla à lista atual.
+        if (!editing) setPagina(1);
+        setVersaoDados(versao => versao + 1);
+        setShowForm(false); setEditing(null);
+        setError(falhas.length ? `Cadastro salvo, mas não foi possível enviar: ${falhas.join("; ")}. Abra o cadastro em Editar e tente novamente.` : "");
       } catch (e) { setError(`Não foi possível salvar o cadastro: ${(e as Error).message}`); }
     };
     const nextHandler = () => {
       const invalid = Array.from(sections[current].querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input,select,textarea")).find(field => field.required && !field.value);
-      if (invalid) { invalid.focus(); invalid.reportValidity(); return; }
+      if (invalid) { invalid.focus(); mostrarErroCampo(invalid); return; }
       showStep(current + 1);
     };
     const prevHandler = () => showStep(current - 1);
@@ -142,7 +280,7 @@ export default function Home() {
     previous.addEventListener("click", prevHandler);
     cancel.addEventListener("click", cancelHandler);
     showStep(0);
-    return () => { form.removeEventListener("submit", saveHandler); next.removeEventListener("click", nextHandler); previous.removeEventListener("click", prevHandler); cancel.removeEventListener("click", cancelHandler); benefitInputs.forEach(input => input.removeEventListener("change", updateOtherBenefit)); photoInput?.removeEventListener("change", updatePhoto); };
+    return () => { form.removeEventListener("submit", saveHandler); next.removeEventListener("click", nextHandler); previous.removeEventListener("click", prevHandler); cancel.removeEventListener("click", cancelHandler); benefitInputs.forEach(input => input.removeEventListener("change", updateOtherBenefit)); photoInput?.removeEventListener("change", updatePhoto); documentInput?.removeEventListener("change", updateDocument); printConsent?.removeEventListener("click", printConsentHandler); };
   }, [showForm, editing, session, recordStatus]);
 
   useEffect(() => {
@@ -164,85 +302,123 @@ export default function Home() {
       elementoAnterior?.focus();
     };
   }, [showForm]);
-  const filtered = useMemo(() => people.filter(p => {
-    const textMatch = [p.name, p.school, p.neighborhood].join(" ").toLocaleLowerCase("pt-BR").includes(search.toLocaleLowerCase("pt-BR"));
-    const age = calcularIdade(p.birthDate);
-    const ageMatch = ageFilter === "all" || (ageFilter === "child" && age !== null && age <= 11) || (ageFilter === "teen" && age !== null && age >= 12 && age <= 17) || (ageFilter === "adult" && age !== null && age >= 18);
-    const statusMatch = statusFilter === "all" || (statusFilter === "priority" && Boolean(p.priority)) || (statusFilter === "regular" && !p.priority);
-    return textMatch && ageMatch && statusMatch;
-  }), [people, search, ageFilter, statusFilter]);
-  const peopleUnder18 = people.filter(person => { const age = calcularIdade(person.birthDate); return age !== null && age < 18; }).length;
-  const familyCount = new Set(people.map(person => person.family_id || person.id).filter(Boolean)).size;
-  const priorityCount = people.filter(person => Boolean(person.priority)).length;
+
+  function irParaPagina(destino: number) {
+    setPagina(Math.min(Math.max(1, destino), Math.max(1, Math.ceil(total / porPagina))));
+    // O painel rola por dentro: leva o usuário de volta ao início da lista.
+    document.querySelector(".painel-principal")?.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function atualizarStatus(person: Person) {
     const novoStatus = person.status === "inativo" ? "ativo" : "inativo";
     const acao = novoStatus === "inativo" ? "inativar" : "reativar";
-    if (!window.confirm(`Deseja ${acao} o cadastro de ${person.name}?`)) return;
+    if (!(await confirmar({ titulo: novoStatus === "inativo" ? "Inativar cadastro" : "Reativar cadastro", mensagem: `Deseja ${acao} o cadastro de ${person.name}?`, confirmar: novoStatus === "inativo" ? "Inativar" : "Reativar", perigo: novoStatus === "inativo" }))) return;
     try {
       await alterarStatusPessoa(person.id, novoStatus, session.access_token);
-      setPeople(await listarPessoas(session.access_token, recordStatus));
+      setVersaoDados(versao => versao + 1);
       setError("");
     } catch (e) {
       setError(`Não foi possível ${acao} o cadastro: ${(e as Error).message}`);
     }
   }
 
-  function exportarCsv() {
+  async function abrirTermoAssinado(person: Person) {
+    const win = window.open("", "_blank");
+    if (!win) { setError("Permita pop-ups neste site para abrir o documento."); return; }
+    try {
+      const blob = await baixarArquivoCadastro(person.consentDocumentPath, session.access_token);
+      win.location.href = URL.createObjectURL(blob);
+      setError("");
+    } catch (e) {
+      win.close();
+      setError(`Não foi possível abrir o termo assinado: ${(e as Error).message}`);
+    }
+  }
+
+  async function exportarCsv() {
+    setExportando(true);
+    let linhas: any[];
+    try { linhas = await listarCadastrosParaExportar(filtros, session.access_token); }
+    catch (e) { setError(`Não foi possível exportar: ${(e as Error).message}`); setExportando(false); return; }
     const colunas = [["Nome", "name"], ["Nascimento", "birthDate"], ["Escola", "school"], ["Bairro", "neighborhood"], ["Forma de entrada", "referralSource"], ["Prioridade", "priority"], ["Status", "status"]] as const;
     const celula = (valor: unknown) => {
       let texto = String(valor ?? "");
       if (/^[\s]*[=+@-]/.test(texto)) texto = `'${texto}`;
       return `"${texto.replaceAll('"', '""')}"`;
     };
-    const csv = [colunas.map(([rotulo]) => celula(rotulo)).join(";"), ...filtered.map((person) => colunas.map(([, campo]) => celula(person[campo])).join(";"))].join("\r\n");
+    const csv = [colunas.map(([rotulo]) => celula(rotulo)).join(";"), ...linhas.map((person) => colunas.map(([, campo]) => celula(person[campo])).join(";"))].join("\r\n");
     const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = "cadastros-renascer.csv";
     link.click();
     URL.revokeObjectURL(url);
+    setExportando(false);
   }
 
   if (!sessionChecked) return <main className="grid min-h-screen place-items-center bg-[#f7f5f2] text-sm text-[#817b89]">Carregando...</main>;
   if (!session?.access_token) return <AuthPanel onLogin={()=>setSession(obterSessao())}/>;
 
-  return <main className="min-h-screen bg-[#f7f5f2] text-[#302942]"><aside className="fixed inset-y-0 hidden w-64 flex-col bg-[#332652] p-7 text-white md:flex"><div className="mb-14 flex items-center gap-3"><img src="/assets/logo-renascer.png" alt="Instituto Renascer" className="h-12 w-12 rounded-full bg-white object-contain p-1"/><span className="font-semibold">Instituto Renascer</span></div><p className="mb-3 text-xs tracking-widest text-white/50">GESTÃO SOCIAL</p><a className="rounded-xl bg-white/15 px-4 py-3 text-sm" href="#cadastros">Cadastros</a><Link className="mt-2 rounded-xl px-4 py-3 text-sm text-white/75 hover:bg-white/10" href="/relatorios">Relatórios cadastrais</Link><div className="mt-auto"><p className="mb-5 text-xs leading-5 text-white/60">Cada história importa.<br/>Cuidar dos dados também é cuidar das pessoas.</p><div className="relative border-t border-white/15 pt-4"><button type="button" aria-expanded={profileMenuOpen} aria-haspopup="menu" onClick={() => setProfileMenuOpen(open => !open)} className="flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left hover:bg-white/10"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f5d66c] text-sm font-bold text-[#332652]">{(session?.perfil?.nome || "ER").slice(0,1).toUpperCase()}</span><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{session?.perfil?.nome || "Equipe Renascer"}</strong><small className="mt-1 block truncate text-xs text-white/60">Administrador</small></span><span aria-hidden="true" className="text-white/70">&#8964;</span></button>{profileMenuOpen && <div role="menu" className="absolute bottom-full left-0 mb-2 w-full overflow-hidden rounded-xl border border-white/10 bg-[#29203f] p-1 shadow-xl"><a role="menuitem" href="/alterar-senha" className="block rounded-lg px-3 py-3 text-sm hover:bg-white/10">Alterar senha</a><button role="menuitem" type="button" onClick={async()=>{setProfileMenuOpen(false);await sair();setSession(null);}} className="block w-full rounded-lg px-3 py-3 text-left text-sm text-white/90 hover:bg-white/10">Sair</button></div>}</div></div></aside><section className="px-5 py-8 md:ml-64 md:px-12"><header className="mb-10 flex justify-between border-b border-[#e8e3dc] pb-5 text-sm"><span className="text-[#817b89]">Gestão social / <strong className="text-[#302942]">Cadastros</strong></span></header><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm text-[#8b6f48]">ACOLHIMENTO E RECEPÇÃO</p><h1 className="mt-2 text-3xl font-semibold">Cadastros</h1><p className="mt-2 text-sm text-gray-500">Consulte e mantenha os cadastros das pessoas atendidas.</p></div><button onClick={()=>{if(showForm){setShowForm(false);setEditing(null);}else{setEditing(null);setShowForm(true);}}} className="rounded-xl bg-[#332652] px-5 py-3 text-sm font-medium text-white">{showForm ? "Fechar formulário" : "+ Novo cadastro"}</button></div>
+  const papel: string = session?.perfil?.papel || "";
+  const somenteLeitura = PAPEIS_SO_LEITURA_CADASTRO.includes(papel);
+
+  return <section className="px-5 py-8 md:px-12"><header className="mb-10 flex justify-between border-b border-[#e8e3dc] pb-5 text-sm"><span className="text-[#817b89]">Gestão social / <strong className="text-[#302942]">Cadastros</strong></span></header><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm text-[#8b6f48]">ACOLHIMENTO E RECEPÇÃO</p><h1 className="mt-2 text-3xl font-semibold">Cadastros</h1><p className="mt-2 text-sm text-gray-500">Consulte e mantenha os cadastros das pessoas atendidas.</p></div>{!somenteLeitura && <button onClick={()=>{if(showForm){setShowForm(false);setEditing(null);}else{setEditing(null);setShowForm(true);}}} className="btn btn-primario">{showForm ? "Fechar formulário" : "+ Novo cadastro"}</button>}</div>
     {error && <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-800">{error}</p>}
-    <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Pessoas atendidas",people.length],["Menores de 18 anos",peopleUnder18],["Famílias acompanhadas",familyCount],["Acompanhamento prioritário",priorityCount]].map(([label,value])=><article key={String(label)} className="rounded-2xl border border-[#eee9e2] bg-white p-5"><p className="text-sm text-gray-500">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p></article>)}</div>
+    <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Pessoas atendidas",estatisticas?.total ?? "—"],["Menores de 18 anos",estatisticas?.menores ?? "—"],["Famílias acompanhadas",estatisticas?.familias ?? "—"],["Acompanhamento prioritário",estatisticas?.prioritarios ?? "—"]].map(([label,value])=><article key={String(label)} className="rounded-2xl border border-[#eee9e2] bg-white p-5"><p className="text-sm text-gray-500">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p></article>)}</div>
     {showForm && <div className="modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) { setShowForm(false); setEditing(null); } }}><section id="record-form-container" role="dialog" aria-modal="true" aria-labelledby="form-title" className="form-modal"><div className="modal-header"><div><h2 id="form-title">{editing ? "Atualizar cadastro" : "Vamos começar pelo acolhimento"}</h2><div className="step-progress mt-5 flex flex-wrap gap-3" aria-label="Etapa 1 de 7">{["Identificação","Família","Endereço","Domicílio","Benefícios","Saúde","Acompanhamento"].map((label,index)=><span key={label} className={`step ${index===0?"active":""}`}><i>{index+1}</i> {label}</span>)}</div></div><button type="button" aria-label="Fechar formulário" onClick={()=>{setShowForm(false);setEditing(null);}} className="close-modal text-2xl text-gray-500">×</button></div><div className="form-body" dangerouslySetInnerHTML={{ __html: recordFormMarkup }} /></section></div>}
     <div className="mt-8 flex flex-wrap gap-3">
-      <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar por nome, escola ou bairro" className="w-full max-w-lg rounded-xl border border-[#e8e3dc] bg-white px-4 py-3 text-sm" />
-      <select value={recordStatus} onChange={event => setRecordStatus(event.target.value as typeof recordStatus)} aria-label="Situação do cadastro" className="rounded-xl border bg-white px-3 text-sm">
+      <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar por nome, escola ou bairro" className="w-full max-w-lg rounded-xl border border-[#e8e3dc] bg-white px-3.5 py-2 text-sm" />
+      <select value={recordStatus} onChange={event => setRecordStatus(event.target.value as typeof recordStatus)} aria-label="Situação do cadastro" className="btn btn-secundario">
         <option value="ativo">Cadastros ativos</option><option value="inativo">Cadastros inativos</option><option value="todos">Todos os cadastros</option>
       </select>
-      <select value={ageFilter} onChange={event => setAgeFilter(event.target.value)} aria-label="Filtrar por idade" className="rounded-xl border bg-white px-3 text-sm">
+      <select value={ageFilter} onChange={event => setAgeFilter(event.target.value)} aria-label="Filtrar por idade" className="btn btn-secundario">
         <option value="all">Todas as idades</option><option value="child">Até 11 anos</option><option value="teen">12 a 17 anos</option><option value="adult">18 anos ou mais</option>
       </select>
-      <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} aria-label="Filtrar por acompanhamento" className="rounded-xl border bg-white px-3 text-sm">
+      <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} aria-label="Filtrar por acompanhamento" className="btn btn-secundario">
         <option value="all">Todas as prioridades</option><option value="priority">Prioritária</option><option value="regular">Acompanhamento</option>
       </select>
-      <span className="self-center text-sm text-gray-500">{filtered.length} cadastros</span>
-      <button onClick={exportarCsv} disabled={!filtered.length} className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50">Exportar CSV</button>
+      <span className="self-center text-sm text-gray-500">{total} {total === 1 ? "cadastro" : "cadastros"}</span>
+      <button onClick={() => void exportarCsv()} disabled={!total || exportando} className="btn btn-secundario">{exportando ? "Exportando…" : "Exportar CSV"}</button>
     </div>
     <div className="mt-4 overflow-x-auto rounded-2xl border border-[#eee9e2] bg-white">
       <table className="w-full min-w-[850px] text-left text-sm">
         <thead className="bg-[#faf9f7] text-xs text-gray-500"><tr><th className="p-4">Nome</th><th className="p-4">Nascimento</th><th className="p-4">Escola</th><th className="p-4">Bairro</th><th className="p-4">Situação</th><th className="p-4">Ações</th></tr></thead>
         <tbody>
-          {filtered.map(person => <tr key={person.id} className="border-t border-[#f0ede8]">
+          {people.map(person => <tr key={person.id} className="border-t border-[#f0ede8]">
             <td className="p-4 font-medium">{person.name}</td>
             <td className="p-4">{person.birthDate ? new Date(`${person.birthDate}T12:00:00`).toLocaleDateString("pt-BR") : "—"}</td>
             <td className="p-4">{person.school || "—"}</td>
             <td className="p-4">{person.neighborhood || "—"}</td>
             <td className="p-4">{person.status === "inativo" ? "Inativo" : person.priority ? "Prioritária" : "Acompanhamento"}</td>
-            <td className="flex gap-3 p-4"><button onClick={() => { setEditing(person); setShowForm(true); }} className="text-[#574778]">Editar</button><button onClick={() => imprimirFicha(person)} className="text-[#574778]">Imprimir</button><button onClick={() => void atualizarStatus(person)} className="text-[#574778]">{person.status === "inativo" ? "Reativar" : "Inativar"}</button></td>
+            <td className="p-3"><div className="flex items-center gap-0.5">
+              {!somenteLeitura && <BotaoIcone rotulo="Editar cadastro" icone={<Pencil size={16} />} aoClicar={() => { setEditing(person); setShowForm(true); }} />}
+              <BotaoIcone rotulo="Imprimir ficha" icone={<Printer size={16} />} aoClicar={() => void imprimirFicha(person, session.access_token)} />
+              <BotaoIcone rotulo="Imprimir termo de consentimento" icone={<FileText size={16} />} aoClicar={() => imprimirTermo(person)} />
+              {person.consentDocumentPath && <BotaoIcone rotulo="Ver termo assinado" icone={<FileCheck2 size={16} />} tom="sucesso" aoClicar={() => void abrirTermoAssinado(person)} />}
+              {!somenteLeitura && <BotaoIcone rotulo={person.status === "inativo" ? "Reativar cadastro" : "Inativar cadastro"} icone={person.status === "inativo" ? <UserCheck size={16} /> : <UserX size={16} />} tom={person.status === "inativo" ? "sucesso" : "perigo"} aoClicar={() => void atualizarStatus(person)} />}
+            </div></td>
           </tr>)}
           {loading && <tr><td colSpan={6} className="p-10 text-center text-gray-500">Carregando cadastros…</td></tr>}
-          {!loading && !filtered.length && <tr><td colSpan={6} className="p-10 text-center text-gray-500">{people.length ? "Nenhum cadastro corresponde à busca." : "Nenhum cadastro disponível para este perfil."}</td></tr>}
+          {!loading && !people.length && <tr><td colSpan={6} className="p-10 text-center text-gray-500">{busca || ageFilter !== "all" || statusFilter !== "all" ? "Nenhum cadastro corresponde à busca." : "Nenhum cadastro disponível para este perfil."}</td></tr>}
         </tbody>
       </table>
     </div>
-  </section></main>;
+    {total > 0 && <nav aria-label="Paginação" className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
+      <div className="flex flex-wrap items-center gap-3">
+        <span>Mostrando {(pagina - 1) * porPagina + 1}–{Math.min(pagina * porPagina, total)} de {total}</span>
+        <select value={porPagina} onChange={event => { setPorPagina(Number(event.target.value)); setPagina(1); }} aria-label="Cadastros por página" className="rounded-lg border border-[#e8e3dc] bg-white px-2 py-1 text-sm text-[#302942]">
+          {[10, 25, 50].map(quantidade => <option key={quantidade} value={quantidade}>{quantidade} por página</option>)}
+        </select>
+      </div>
+      <div className="flex items-center gap-1">
+        <button onClick={() => irParaPagina(pagina - 1)} disabled={pagina <= 1 || loading} aria-label="Página anterior" className="grid h-8 w-8 place-items-center rounded-lg border border-[#e8e3dc] bg-white text-[#332652] disabled:opacity-40"><ChevronLeft size={16} /></button>
+        {paginasVisiveis(pagina, Math.max(1, Math.ceil(total / porPagina))).map((item, indice) => item === "…"
+          ? <span key={`reticencias-${indice}`} className="px-1">…</span>
+          : <button key={item} onClick={() => irParaPagina(item)} disabled={loading} aria-label={`Página ${item}`} aria-current={item === pagina ? "page" : undefined} className={`h-8 min-w-8 rounded-lg border px-2 ${item === pagina ? "border-[#332652] bg-[#332652] text-white" : "border-[#e8e3dc] bg-white text-[#332652]"}`}>{item}</button>)}
+        <button onClick={() => irParaPagina(pagina + 1)} disabled={pagina >= Math.ceil(total / porPagina) || loading} aria-label="Próxima página" className="grid h-8 w-8 place-items-center rounded-lg border border-[#e8e3dc] bg-white text-[#332652] disabled:opacity-40"><ChevronRight size={16} /></button>
+      </div>
+    </nav>}
+  </section>;
 }
 
 
