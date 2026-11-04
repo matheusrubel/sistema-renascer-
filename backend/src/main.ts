@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
-import { json, type Request } from "express";
+import { json, raw, type Request } from "express";
 import { AppModule } from "./app.module";
 import { carregarVariaveisBackend, obterConfiguracaoSupabase, type ConfiguracaoSupabase } from "./env";
 
@@ -14,6 +14,8 @@ async function bootstrap() {
   }));
   app.setGlobalPrefix("api");
   app.enableCors({ origin: process.env.WEB_ORIGIN ? process.env.WEB_ORIGIN.split(",").map((origin) => origin.trim()) : ["http://localhost:3000", "http://127.0.0.1:3000"] });
+  // Envio de fotos e termos: corpo binário repassado ao Storage (limite de 5 MB no bucket, 6 MB aqui).
+  app.use("/api/supabase/storage", raw({ type: ["image/jpeg", "image/png", "application/pdf"], limit: "6mb" }));
   app.use("/api/supabase", async (request: any, response: any) => {
     let config: ConfiguracaoSupabase;
     try { config = obterConfiguracaoSupabase(); }
@@ -26,10 +28,12 @@ async function bootstrap() {
       if (request.headers.authorization) headers.authorization = request.headers.authorization;
       if (request.headers["content-type"]) headers["content-type"] = request.headers["content-type"];
       if (request.headers.prefer) headers.prefer = request.headers.prefer;
+      if (request.headers["x-upsert"]) headers["x-upsert"] = request.headers["x-upsert"];
+      const semCorpo = request.method === "GET" || request.method === "HEAD" || (request.method === "DELETE" && path.startsWith("/storage/"));
       const upstream = await fetch(`${baseUrl}${path}`, {
         method: request.method,
         headers,
-        ...(request.method === "GET" || request.method === "HEAD" ? {} : { body: request.rawBody ?? JSON.stringify(request.body ?? {}) }),
+        ...(semCorpo ? {} : { body: Buffer.isBuffer(request.body) ? request.body : request.rawBody ?? JSON.stringify(request.body ?? {}) }),
       });
       response.status(upstream.status);
       upstream.headers.forEach((value, key) => { if (["content-type", "content-range", "range-unit"].includes(key.toLowerCase())) response.setHeader(key, value); });
